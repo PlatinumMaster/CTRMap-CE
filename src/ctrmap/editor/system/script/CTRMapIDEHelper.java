@@ -12,11 +12,11 @@ import ctrmap.pokescript.ide.system.project.include.Dependency;
 import ctrmap.pokescript.ide.system.project.include.DependencyType;
 import ctrmap.pokescript.ide.system.savedata.IDEWorkspace;
 import ctrmap.scriptformats.gen5.VCommandDataBase;
-import ctrmap.scriptformats.gen5.VDecompiler;
-import ctrmap.scriptformats.gen5.VScriptFile;
 import xstandard.formats.zip.ZipArchive;
 import xstandard.fs.FSFile;
 import ctrmap.formats.common.GameInfo;
+import ctrmap.pokescript.ide.BeaterScriptHighlighting;
+import ctrmap.pokescript.ide.system.project.IDEFile;
 import ctrmap.pokescript.ide.system.project.IDEProjectManifest;
 import xstandard.formats.yaml.Yaml;
 import xstandard.gui.DialogUtils;
@@ -25,6 +25,7 @@ import xstandard.text.FormattingUtils;
 import xstandard.text.StringEx;
 import xstandard.util.ParsingUtils;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -80,6 +81,13 @@ public class CTRMapIDEHelper {
 						}
 					}
 				}
+                                
+                                BeaterScriptHighlighting.keywords.clear();
+                                for (Map.Entry<Integer, VCommandDataBase> cdb : commandDBs.entrySet()) {
+                                    for (String command_name : cdb.getValue().getCommandNames()) {
+                                        BeaterScriptHighlighting.keywords.add(command_name);
+                                    }
+                                }
 			}
 		}
 	}
@@ -87,6 +95,10 @@ public class CTRMapIDEHelper {
 	public VCommandDataBase getCommandDBByOvlNo(int ovlNo) {
 		return commandDBs.get(ovlNo);
 	}
+        
+        public ArrayList<Integer> getCommandDBIndices() {
+            return new ArrayList<Integer>(commandDBs.keySet());
+        }
 
 	public boolean hasProject(ProjectSetupParam setupParam) {
 		return workspace.getProjectDir(setupParam.getName()).isDirectory();
@@ -119,13 +131,6 @@ public class CTRMapIDEHelper {
 
 			IDEProjectManifest mf = project.getManifest();
 
-			String mainClassName = setupParam.getMainClassName();
-			if (mainClassName != null) {
-				FSFile mainClassFile = project.getClassFile(mainClassName);
-				mainClassFile.setBytes(setupParam.getMainClassBytes());
-				mf.setMainClass(mainClassName);
-			}
-
 			Dependency sdk = new Dependency(DependencyType.LIBRARY);
 			String compilerDef = null;
 
@@ -155,6 +160,14 @@ public class CTRMapIDEHelper {
 		loadedProjects.put(projectDir, project);
 		return project;
 	}
+        
+         public IDEFile getScriptByProject(ProjectSetupParam params, IDEProject project, String name) {
+            IDEFile mainClassFile = project.getExistingFile(name);
+            if (!mainClassFile.exists()) {
+                mainClassFile.setBytes(params.getMainClassBytes());
+            }
+            return mainClassFile;
+        }
 
 	public void openProjectInIDE(IDEProject project) {
 		getIDE().openProject(project);
@@ -171,6 +184,11 @@ public class CTRMapIDEHelper {
 		}
 		return ide;
 	}
+        
+        public void setIDE(PSIDE ide) {
+            this.ide = ide;
+	    ide.loadWorkspace(workspace);
+        }
 
 	public VCommandDataBase createCombCommandDB(int... overlayIds) {
 		List<VCommandDataBase> databases = new ArrayList<>();
@@ -195,64 +213,6 @@ public class CTRMapIDEHelper {
 		public byte[] getMainClassBytes();
 	}
 
-	public static class ZoneEventProjectSetupParam5Decomp extends ZoneEventProjectSetupParam5 {
-
-		private final VScriptFile script;
-		private final VCommandDataBase cdb;
-
-		public ZoneEventProjectSetupParam5Decomp(
-			int zoneId,
-			int textFileId,
-			VScriptFile script,
-			int[] overlayIds,
-			GameInfo game,
-			CTRMapIDEHelper ideHelper
-		) {
-			super(zoneId, textFileId, game);
-			this.script = script;
-			cdb = ideHelper.createCombCommandDB(overlayIds);
-		}
-
-		@Override
-		public byte[] getMainClassBytes() {
-			if (game.isGenV()) {
-				VDecompiler decompiler = new VDecompiler(script, cdb);
-				decompiler.overrideClassName = getMainClassName();
-				decompiler.decompile();
-				try {
-					StringBuilder sb = new StringBuilder();
-
-					sb.append("import messages.script.Msg").append(FormattingUtils.getIntWithLeadingZeros(4, textFileId)).append(".MSGID;\n\n");
-
-					sb.append(decompiler.dump());
-
-					return sb.toString().getBytes();
-				} catch (Exception ex) {
-					ex.printStackTrace();
-					DialogUtils.showErrorMessage("Decompilation failed", "The file failed to decompile. Starting from scratch.");
-				}
-				return super.getMainClassBytes();
-			} else {
-				throw new UnsupportedOperationException();
-			}
-		}
-	}
-
-	public static class ZoneEventProjectSetupParam5 extends ZoneEventProjectSetupParam {
-
-		public ZoneEventProjectSetupParam5(int zoneId, int textFileId, GameInfo game) {
-			super(zoneId, textFileId, game);
-		}
-
-		@Override
-		public byte[] getMainClassBytes() {
-			return PSIDE.getTemplateData(
-				"Template5.pks",
-				new PSIDETemplateVar("CLASSNAME", getMainClassName()),
-				new PSIDETemplateVar("TEXTNUM", FormattingUtils.getIntWithLeadingZeros(4, textFileId))
-			);
-		}
-	}
 
 	public static class ZoneEventProjectSetupParam6 extends ZoneEventProjectSetupParam {
 
