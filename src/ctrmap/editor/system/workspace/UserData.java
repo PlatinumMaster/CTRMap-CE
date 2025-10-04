@@ -8,7 +8,11 @@ public class UserData {
 		SCRIPT_INCLUDE("scripting/include"),
 		SCRIPT_WORKSPACE("scripting/workspace"),
 		SCRIPT_MNG("scripting/manager"),
-		SCRIPT_CACHE("scripting/cache");
+		SCRIPT_CACHE("scripting/cache"),
+                
+                TRAINER_DATA("trainers"),
+                ENUMS("enums"),
+                ENCOUNTERS("encounters");
 		
 		private final String pathFromUsrDir;
 
