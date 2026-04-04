@@ -17,6 +17,7 @@ import xstandard.fs.FSUtil;
 import xstandard.io.base.impl.access.MemoryStream;
 import xstandard.thread.ThreadingUtils;
 import java.awt.event.ActionEvent;
+import java.io.InputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,8 +26,9 @@ import javax.swing.Timer;
 public class CTRMapProject {
 
 	public static final ExtensionFilter EXT_FILTER = new ExtensionFilter("CTRMap Project", "*.cmproj");
-
-	private static final MsgTxt errorResource = new MsgTxt(CTRMapResources.ACCESSOR.getStream("message/project_loader_errors.msgtxt"));
+        
+        private static final InputStream errorMessageStream = CTRMapResources.ACCESSOR.getStream("message/project_loader_errors.msgtxt");
+	private static final MsgTxt errorResource = errorMessageStream != null ? new MsgTxt(errorMessageStream) : null;
 
 	private static final String PRJ_USRDIR_KEY = "UserDataPath";
 	private static final String VFS_OVFS_KEY = "VFSOverlay";
@@ -83,7 +85,9 @@ public class CTRMapProject {
 
 	public final void readProjectData(ProjectManager man) {
 		if (!prjCfgFile.exists()) {
-			man.raiseLoadError(errorResource.getLineForName("no_file"));
+                        if (man != null) {
+                            man.raiseLoadError(errorResource.getLineForName("no_file"));
+                        }
 			return;
 		}
 
@@ -96,7 +100,9 @@ public class CTRMapProject {
 		openTimestamp = System.currentTimeMillis();
 
 		if (!prjCfg.root.hasChildren(PRJ_USRDIR_KEY, VFS_BASEFS_KEY, VFS_OVFS_KEY)) {
-			man.raiseLoadError(errorResource.getLineForName("bad_file"));
+                        if (man != null && errorResource != null) {
+                            man.raiseLoadError(errorResource.getLineForName("bad_file"));
+                        }
 			return;
 		}
 
@@ -119,17 +125,23 @@ public class CTRMapProject {
 		);
 
 		if (!usrdir.exists()) {
-			man.raiseLoadError(errorResource.getLineForName("no_usrdir"));
+                        if (man != null && errorResource != null) {
+                            man.raiseLoadError(errorResource.getLineForName("no_usrdir"));
+                        }
 			return;
 		}
 
 		if (!wsfs.vfs.getBaseFSRoot().exists()) {
-			man.raiseLoadError(errorResource.getLineForName("no_basefs"));
+                        if (man != null && errorResource != null) {
+                            man.raiseLoadError(errorResource.getLineForName("no_basefs"));
+                        }
 			return;
 		}
 
 		if (!wsfs.vfs.getOvFSRoot().exists()) {
-			man.raiseLoadError(errorResource.getLineForName("no_ovfs"));
+                        if (man != null && errorResource != null) {
+                            man.raiseLoadError(errorResource.getLineForName("no_ovfs"));
+                        }
 			return;
 		}
 
@@ -143,30 +155,42 @@ public class CTRMapProject {
 			if (isCtr) {
 				wsfs.setWildCardManager(FSWildCardManagerCTR.INSTANCE);
 				if (!FSFile.exists(wsfs.getBaseFsFile(":romfs:"))) {
-					details.add(errorResource.getLineForName("no_romfs"));
+                                        if (errorResource != null) {
+                                            details.add(errorResource.getLineForName("no_romfs"));
+                                        }
 				}
 				if (!FSFile.exists(wsfs.getBaseFsFile(":exefs:"))) {
-					details.add(errorResource.getLineForName("no_exefs"));
+                                        if (errorResource != null) {
+                                            details.add(errorResource.getLineForName("no_exefs"));
+                                        }
 				} else {
 					if (!FSFile.exists(wsfs.getBaseFsFile(":exefs:/:codebin:"))) {
-						details.add(errorResource.getLineForName("no_codebin"));
+                                                if (errorResource != null) {
+                                                    details.add(errorResource.getLineForName("no_codebin"));
+                                                }
 					}
 				}
 				if (!FSFile.exists(wsfs.getBaseFsFile(":exheader:"))) {
-					details.add(errorResource.getLineForName("no_exheader"));
+                                        if (errorResource != null) {
+                                            details.add(errorResource.getLineForName("no_exheader"));
+                                        }
 				}
 			}
+                        
+                        if (errorResource != null) {
+                            StringBuilder errors = new StringBuilder(errorResource.getLineForName("bad_game"));
+                            for (String err : details) {
+                                    errors.append("\n");
+                                    errors.append(err);
+                            }
+                            if (game != null) {
+                                    errors.append("Detected game: ").append(game);
+                            }
 
-			StringBuilder errors = new StringBuilder(errorResource.getLineForName("bad_game"));
-			for (String err : details) {
-				errors.append("\n");
-				errors.append(err);
-			}
-			if (game != null) {
-				errors.append("Detected game: ").append(game);
-			}
-
-			man.raiseLoadError(errors.toString());
+                            if (man != null) {
+                                man.raiseLoadError(errors.toString());
+                            }
+                        }
 			return;
 		}
 		userData = new UserData(usrdir);

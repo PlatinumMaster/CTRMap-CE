@@ -10,6 +10,11 @@ public class UserData {
 		SCRIPT_MNG("scripting/manager"),
 		SCRIPT_CACHE("scripting/cache"),
                 
+                PML_PERSONAL("pml/personal"),
+                PML_EVOLUTIONS("pml/evolutions"),
+                PML_LEARNSETS("pml/learnsets"),
+                PML_MOVES("pml/moves"),
+                
                 TRAINER_DATA("trainers"),
                 ENUMS("enums"),
                 ENCOUNTERS("encounters");

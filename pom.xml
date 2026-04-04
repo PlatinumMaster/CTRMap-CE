@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.github.hellooo7</groupId>
+    <artifactId>ctrmap-parent</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>CTRMap Parent</name>
+    <description>CTRMap reactor build</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <maven.build.timestamp.format>yyyy-MM-dd HH:mm:ss</maven.build.timestamp.format>
+        <ctrmap.mainClass>ctrmap.Launc</ctrmap.mainClass>
+    </properties>
+
+    <modules>
+        <module>submodules/XStandard</module>
+        <module>submodules/PokeScript/PokeScript</module>
+        <module>submodules/PokeScript/PokeScriptIDE/submodules/RSyntaxTextArea/RSyntaxTextArea</module>
+        <module>submodules/PokeScript/PokeScriptIDE</module>
+        <module>submodules/RPMAuthoringTools</module>
+        <module>ctrmap-app</module>
+    </modules>
+
+    <repositories>
+        <repository>
+            <id>shared-xstandard-local-repo</id>
+            <url>file:${maven.multiModuleProjectDirectory}/submodules/XStandard/lib/maven</url>
+        </repository>
+    </repositories>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.github.hellooo7</groupId>
+                <artifactId>xstandard</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.hellooo7</groupId>
+                <artifactId>pokescript</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.hellooo7</groupId>
+                <artifactId>pokescript-ide</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.hellooo7</groupId>
+                <artifactId>rpm-authoring-tools</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jogamp.gluegen</groupId>
+                <artifactId>gluegen-rt</artifactId>
+                <version>2.4.0-local</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jogamp.jogl</groupId>
+                <artifactId>jogl-all</artifactId>
+                <version>2.4.0-local</version>
+            </dependency>
+            <dependency>
+                <groupId>org.joml</groupId>
+                <artifactId>joml</artifactId>
+                <version>1.10.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>
