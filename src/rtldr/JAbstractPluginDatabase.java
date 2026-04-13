@@ -58,8 +58,11 @@ public abstract class JAbstractPluginDatabase {
 	public void removePlugin(String name) {
 		if (name != null) {
 			PluginEntry e = getPlugin(name);
-			if (isSynchronized()) {
-				JRTLDRCore.unloadJarExt(new File(e.path));
+			if (e != null && isSynchronized()) {
+				File f = new File(e.path);
+				if (f.exists()) {
+					JRTLDRCore.unloadJarExt(f);
+				}
 			}
 			getPrefsRoot().remove(name);
 		}

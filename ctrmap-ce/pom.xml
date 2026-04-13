@@ -18,6 +18,7 @@
         <build.date>local</build.date>
         <build.commit>unknown</build.commit>
         <build.type>nightly</build.type>
+        <build.github.repo>PlatinumMaster/CTRMap-CE</build.github.repo>
     </properties>
 
     <repositories>
@@ -147,6 +148,10 @@
                     <exclude>**/*.java</exclude>
                     <exclude>**/*.form</exclude>
                 </excludes>
+            </resource>
+            <resource>
+                <directory>${project.basedir}/src/main/resources-filtered</directory>
+                <filtering>true</filtering>
             </resource>
         </resources>
         <plugins>

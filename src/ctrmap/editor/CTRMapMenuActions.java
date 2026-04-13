@@ -8,6 +8,8 @@ import ctrmap.creativestudio.ngcs.NGCS;
 import ctrmap.editor.gui.ControlsHelpDialog;
 import ctrmap.editor.gui.settings.SettingsForm;
 import ctrmap.missioncontrol_base.IMissionControl;
+import ctrmap.editor.system.update.UpdateCheckDialog;
+import ctrmap.util.gui.addon.AddonStoreFrame;
 import xstandard.fs.FSFile;
 import xstandard.gui.DialogUtils;
 import xstandard.gui.file.XFileDialog;
@@ -61,6 +63,11 @@ public class CTRMapMenuActions {
 			new BackupRestoreForm(cm).setVisible(true);
 		});
 
+		//Plug-in Manager
+		uiMgr.addMenuItem(menuName_Tools, "Plug-in Manager", (cm) -> {
+			new AddonStoreFrame().setVisible(true);
+		});
+
 		//Settings
 		uiMgr.addMenuItem(menuName_Options, "Settings", (cm) -> {
 			SettingsForm.open(cm);
@@ -78,6 +85,16 @@ public class CTRMapMenuActions {
 				DialogUtils.showErrorMessage("Browser open error", "Your system either does not support the Java Desktop API or you do not have a suitable browser installed.");
 			}
 		});*/
+		//Check for Updates
+		uiMgr.addMenuItem(menuName_Help, "Check for Updates", (cm) -> {
+			UpdateCheckDialog.checkForUpdates(cm, false);
+		});
+
+		//Update Channel
+		uiMgr.addMenuItem(menuName_Help, "Update Channel", (cm) -> {
+			UpdateCheckDialog.showChannelSelector(cm);
+		});
+
 		uiMgr.addMenuItem(menuName_Help, "Controls", (cm) -> {
 			ControlsHelpDialog dlg = new ControlsHelpDialog();
 			dlg.setLocationRelativeTo(cm);
