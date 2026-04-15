@@ -313,60 +313,13 @@ public class SpriteRenderer {
 		if (imgW <= 0 || imgH <= 0) {
 			return EMPTY;
 		}
-		System.out.println("[NGCS2D-DBG] renderCell " + cell.name
-			+ " mode=" + mappingMode
-			+ " bbox=(" + minX + "," + minY + ")-(" + maxX + "," + maxY + ")"
-			+ " imgW=" + imgW + " imgH=" + imgH
-			+ " tsW=" + tileSheet.getEffectiveTileWidth()
-			+ " tsH=" + tileSheet.getEffectiveTileHeight()
-			+ " tsFmt=" + tileSheet.format
-			+ " palFmt=" + palette.format
-			+ " palLen=" + palette.colors.length
-			+ " hasXfer=" + cell.hasVramTransfer
-			+ " xferSrc=0x" + Integer.toHexString(cell.vramTransferSrcAddr)
-			+ " xferSize=" + cell.vramTransferSize);
+		// Cell rendering: compose OAMs into a single image
 
 		BufferedImage img = new BufferedImage(imgW, imgH, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = img.createGraphics();
 
-		boolean traceCell0 = "Cell_0".equals(cell.name);
 		for (int i = cell.oams.size() - 1; i >= 0; i--) {
 			Sprite2DOAM oam = cell.oams.get(i);
-			if (traceCell0) {
-				System.out.println("[NGCS2D-DBG]   Cell_0 OAM[" + i + "] x=" + oam.x + " y=" + oam.y
-					+ " w=" + oam.width + " h=" + oam.height
-					+ " tileIdx=" + oam.tileIndex + " pal=" + oam.paletteIndex);
-				// Walk what chars this OAM would touch
-				int tw = oam.width >> 3;
-				int th = oam.height >> 3;
-				boolean dbgUseNcgrStride = (mappingMode == Sprite2DResource.MAPPING_MODE_2D)
-					|| tileSheet.rasterLayout;
-				int stride = dbgUseNcgrStride
-					? Math.max(1, tileSheet.getEffectiveTileWidth())
-					: Math.max(1, tw);
-				int nBits = (tileSheet.format == 3) ? 4 : 8;
-				int chrSize = 8 * nBits;
-				StringBuilder sb = new StringBuilder();
-				for (int tty = 0; tty < th; tty++) {
-					for (int ttx = 0; ttx < tw; ttx++) {
-						int c = oam.tileIndex + tty * stride + ttx;
-						sb.append(c);
-						if (cell.hasVramTransfer) {
-							int byteAddr = c * chrSize;
-							boolean inside = byteAddr < cell.vramTransferSize;
-							if (inside) {
-								int remapped = (byteAddr + cell.vramTransferSrcAddr) / chrSize;
-								sb.append("->").append(remapped);
-							} else {
-								sb.append("(raw)");
-							}
-						}
-						sb.append(' ');
-					}
-					sb.append("| ");
-				}
-				System.out.println("[NGCS2D-DBG]     chars: " + sb.toString());
-			}
 			BufferedImage oamImg = renderOAM(oam, tileSheet, palette, mappingMode, cell);
 			g.drawImage(oamImg, oam.x - minX, oam.y - minY, null);
 		}

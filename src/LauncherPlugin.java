@@ -2,6 +2,7 @@
 import ctrmap.Launc;
 
 import ctrmap.creativestudio.NGCSStarter;
+import ctrmap.creativestudio.NGCS2DStarter;
 import ctrmap.editor.CTRMap;
 import ctrmap.util.gui.addon.AddonStoreFrame;
 
@@ -11,6 +12,7 @@ public class LauncherPlugin implements Launc.IPlugin {
 	public void registSubprocesses(Launc.JulietInterface j) {
 		j.registerSubprocess("CTRMap", CTRMap.STARTER);
 		j.registerSubprocess("CreativeStudio", NGCSStarter.INSTANCE);
+		j.registerSubprocess("CreativeStudio 2D", NGCS2DStarter.INSTANCE);
 		j.registerSubprocess("Plug-in Manager", AddonStoreFrame.STARTER_FROM_LAUNCHER);
 	}
 }

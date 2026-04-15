@@ -760,4 +760,13 @@ public class NGCS2D extends JFrame implements NGCS2DContentAccessor {
 	public static void dummy() {
 
 	}
+
+	public static void main(String args[]) {
+		java.awt.EventQueue.invokeLater(() -> {
+			ComponentUtils.setSystemNativeLookAndFeel();
+			NGCS2D cs = new NGCS2D();
+			cs.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+			cs.setVisible(true);
+		});
+	}
 }
