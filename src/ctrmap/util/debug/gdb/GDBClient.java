@@ -315,37 +315,44 @@ public class GDBClient {
 	// --- Breakpoints ---
 
 	/**
-	 * Set a software breakpoint.
+	 * Set a breakpoint. Tries hardware breakpoint first (Z1), then falls back
+	 * to software breakpoint (Z0).  melonDS only supports hardware breakpoints.
+	 *
 	 * @param address The breakpoint address
 	 * @param kind    Breakpoint kind: 2 for Thumb, 4 for ARM
+	 * @return true if the stub accepted the breakpoint
 	 */
-	public void setBreakpoint(int address, int kind) throws IOException {
+	public boolean setBreakpoint(int address, int kind) throws IOException {
 		String addrHex = Long.toHexString(address & 0xFFFFFFFFL);
-		sendCommand("Z0," + addrHex + "," + Integer.toHexString(kind));
+		// Try hardware breakpoint first
+		String reply = sendCommand("Z1," + addrHex + "," + Integer.toHexString(kind));
+		if ("OK".equals(reply)) {
+			log("Hardware breakpoint set at 0x" + addrHex);
+			return true;
+		}
+		// Fall back to software breakpoint
+		reply = sendCommand("Z0," + addrHex + "," + Integer.toHexString(kind));
+		if ("OK".equals(reply)) {
+			log("Software breakpoint set at 0x" + addrHex);
+			return true;
+		}
+		log("Failed to set breakpoint at 0x" + addrHex + ": " + reply);
+		return false;
 	}
 
 	/**
-	 * Remove a software breakpoint.
+	 * Remove a breakpoint. Tries removing as hardware first, then software.
+	 *
+	 * @return true if the stub accepted the removal
 	 */
-	public void removeBreakpoint(int address, int kind) throws IOException {
+	public boolean removeBreakpoint(int address, int kind) throws IOException {
 		String addrHex = Long.toHexString(address & 0xFFFFFFFFL);
-		sendCommand("z0," + addrHex + "," + Integer.toHexString(kind));
-	}
-
-	/**
-	 * Set a hardware breakpoint.
-	 */
-	public void setHardwareBreakpoint(int address, int kind) throws IOException {
-		String addrHex = Long.toHexString(address & 0xFFFFFFFFL);
-		sendCommand("Z1," + addrHex + "," + Integer.toHexString(kind));
-	}
-
-	/**
-	 * Remove a hardware breakpoint.
-	 */
-	public void removeHardwareBreakpoint(int address, int kind) throws IOException {
-		String addrHex = Long.toHexString(address & 0xFFFFFFFFL);
-		sendCommand("z1," + addrHex + "," + Integer.toHexString(kind));
+		String reply = sendCommand("z1," + addrHex + "," + Integer.toHexString(kind));
+		if ("OK".equals(reply)) {
+			return true;
+		}
+		reply = sendCommand("z0," + addrHex + "," + Integer.toHexString(kind));
+		return "OK".equals(reply);
 	}
 
 	// --- Internal transport ---

@@ -26,9 +26,16 @@ public class GDBRegisters {
 	public static final int CPSR = 16;
 
 	/**
-	 * Total number of registers in the GDB 'g' packet for ARM targets.
+	 * Number of core registers we track locally (r0-r15 + CPSR).
 	 */
 	public static final int NUM_REGISTERS = 17;
+
+	/**
+	 * GDB register number for CPSR as reported by melonDS's target description XML
+	 * (regnum="25").  This is the number used with the 'p' / 'P' commands, NOT the
+	 * position in the 'g' response (which depends on the stub's internal enum order).
+	 */
+	public static final int GDB_REGNUM_CPSR = 25;
 
 	// CPSR bit positions
 	public static final int CPSR_T_BIT = 5;   // Thumb state
