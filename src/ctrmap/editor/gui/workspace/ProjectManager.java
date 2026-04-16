@@ -194,6 +194,7 @@ public class ProjectManager extends javax.swing.JFrame {
         fileMenu = new javax.swing.JMenu();
         btnNewProject = new javax.swing.JMenuItem();
         btnOpenProject = new javax.swing.JMenuItem();
+        btnGenerateProject = new javax.swing.JMenuItem();
         btnExit = new javax.swing.JMenuItem();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
@@ -313,6 +314,15 @@ public class ProjectManager extends javax.swing.JFrame {
         });
         fileMenu.add(btnOpenProject);
 
+        btnGenerateProject.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_G, java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        btnGenerateProject.setText("Generate Project from ROM");
+        btnGenerateProject.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnGenerateProjectActionPerformed(evt);
+            }
+        });
+        fileMenu.add(btnGenerateProject);
+
         btnExit.setAccelerator(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F4, java.awt.event.InputEvent.ALT_DOWN_MASK));
         btnExit.setText("Exit");
         btnExit.addActionListener(new java.awt.event.ActionListener() {
@@ -394,6 +404,20 @@ public class ProjectManager extends javax.swing.JFrame {
 		}
     }//GEN-LAST:event_btnOpenProjectActionPerformed
 
+    private void btnGenerateProjectActionPerformed(java.awt.event.ActionEvent evt) {
+		GenerateProjectDialog dlg = new GenerateProjectDialog(this, true);
+		final ProjectManager man = this;
+		dlg.addOnProjectGenerateListener((FSFile projectFile, String gamePath) -> {
+			String normalizedPath = GameRegistryData.normalizePath(gamePath);
+			if (findGameEntry(normalizedPath) == null) {
+				addGameEntryAction(new GameEntryUI(normalizedPath, man));
+			}
+			addProjectEntryAction(new ProjectEntryUI(new ProjectRegistryData.ProjectRegistryEntry(projectFile), man));
+		});
+		dlg.addCanAddGameVerifier(canAddGameVerifier);
+		dlg.setVisible(true);
+    }
+
     private void btnAddDSRomActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnAddDSRomActionPerformed
 		AddROMGameDialog dlg = new AddROMGameDialog(this, true);
 		final ProjectManager man = this;
@@ -430,6 +454,7 @@ public class ProjectManager extends javax.swing.JFrame {
     private javax.swing.JButton btnAddDSRom;
     private javax.swing.JButton btnAddGame;
     private javax.swing.JMenuItem btnExit;
+    private javax.swing.JMenuItem btnGenerateProject;
     private javax.swing.JMenuItem btnNewProject;
     private javax.swing.JMenuItem btnOpenProject;
     private javax.swing.JMenu fileMenu;

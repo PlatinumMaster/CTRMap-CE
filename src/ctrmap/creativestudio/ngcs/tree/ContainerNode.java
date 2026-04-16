@@ -30,7 +30,6 @@ import xstandard.text.FormattingUtils;
 import xstandard.util.ArraysEx;
 import xstandard.util.ListenableList;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 
 public class ContainerNode extends CSNode {
@@ -188,46 +187,39 @@ public class ContainerNode extends CSNode {
 				}
 				sourceList = l;
 				break;
-			case JOINT:
-			case MATERIAL:
-			case MESH:
-				Model model = getFirst(imported.models);
-
-				if (model != null) {
-					switch (childCntType) {
-						case JOINT:
-							sourceList = model.skeleton.getJoints();
-							break;
-						case MATERIAL:
-							sourceList = model.materials;
-							break;
-						case MESH:
-							sourceList = model.meshes;
-							break;
+			case JOINT: {
+				List<Joint> allJoints = new ArrayList<>();
+                for (Model mdl : imported.models) {
+					if (mdl.materials != null) {
+                    	allJoints.addAll(mdl.skeleton.getJoints());
 					}
-				}
-
+                }
+                sourceList = allJoints;
+                break;
+			}
+			case MATERIAL: {
+				List<Material> allMaterials = new ArrayList<>();
+                for (Model mdl : imported.models) {
+                    allMaterials.addAll(mdl.materials);
+                }
+                sourceList = allMaterials;
+                break;
+			}
+			case MESH:
+				List<Mesh> allMeshes = new ArrayList<>();
+                for (Model mdl : imported.models) {
+                    allMeshes.addAll(mdl.meshes);
+                }
+                sourceList = allMeshes;
 				break;
 		}
 
 		if (sourceList != null && !sourceList.isEmpty()) {
-			HashSet<String> names = new HashSet<>();
-			for (NamedResource r : sourceList) {
-				String name = r.getName();
-				if (!names.contains(name)) {
-					names.add(name);
-				}
-			}
 			if (replace) {
-				for (int i = 0; i < list.size(); i++) {
-					if (names.contains(((NamedResource) list.get(i)).getName())) {
-						list.remove(i);
-						i--;
-					}
-				}
+				G3DResource.addListOverwrite(list, sourceList);
+			} else {
+				G3DResource.addListPrededupe(list, sourceList, childCntType.name);
 			}
-
-			G3DResource.addListPrededupe(list, sourceList, childCntType.name);
 			
 			setExpansionState(true);
 		}

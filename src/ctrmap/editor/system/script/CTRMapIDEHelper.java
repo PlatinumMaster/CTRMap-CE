@@ -24,6 +24,7 @@ import xstandard.res.ResourceAccess;
 import xstandard.text.FormattingUtils;
 import xstandard.text.StringEx;
 import xstandard.util.ParsingUtils;
+import ctrmap.pokescript.ide.system.project.IDEFile;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -90,6 +91,20 @@ public class CTRMapIDEHelper {
                                 }
 			}
 		}
+	}
+
+	public void setIDE(PSIDE ide) {
+		this.ide = ide;
+	}
+
+	public ArrayList<Integer> getCommandDBIndices() {
+		return new ArrayList<>(commandDBs.keySet());
+	}
+
+	public IDEFile getScriptByProject(ProjectSetupParam setupParam, IDEProject project, String filename) {
+		FSFile classFile = project.getClassFile(setupParam.getMainClassName());
+		classFile.setBytes(setupParam.getMainClassBytes());
+		return new IDEFile(project, classFile);
 	}
 
 	public VCommandDataBase getCommandDBByOvlNo(int ovlNo) {

@@ -18,7 +18,7 @@ import rtldr.JExtensionStateListener;
 import rtldr.JGarbageCollector;
 import rtldr.RExtensionBase;
 
-public class Launc extends ActionSelector {
+public class 	Launc extends ActionSelector {
 	
 	private static final JulietInterface PLUGIN_IFACE_INSTANCE = new JulietInterface();
 	private static final List<Subprocess> launcherSubprocs = new ArrayList<>();

@@ -207,6 +207,9 @@ public class CTRMap extends JFrame {
 		}
 
 		CTRMapPluginControl.readyInterface(plugins);
+
+		// Silent update check on startup
+		ctrmap.editor.system.update.UpdateCheckDialog.checkForUpdates(this, true);
 	}
 
 	private static final Thread STDERR_FLUSH_HOOK = new Thread((() -> {
