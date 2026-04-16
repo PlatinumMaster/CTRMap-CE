@@ -93,27 +93,13 @@ public class CTRMapIDEHelper {
 		}
 	}
 
-	public void setIDE(PSIDE ide) {
-		this.ide = ide;
-	}
-
 	public ArrayList<Integer> getCommandDBIndices() {
 		return new ArrayList<>(commandDBs.keySet());
-	}
-
-	public IDEFile getScriptByProject(ProjectSetupParam setupParam, IDEProject project, String filename) {
-		FSFile classFile = project.getClassFile(setupParam.getMainClassName());
-		classFile.setBytes(setupParam.getMainClassBytes());
-		return new IDEFile(project, classFile);
 	}
 
 	public VCommandDataBase getCommandDBByOvlNo(int ovlNo) {
 		return commandDBs.get(ovlNo);
 	}
-        
-        public ArrayList<Integer> getCommandDBIndices() {
-            return new ArrayList<Integer>(commandDBs.keySet());
-        }
 
 	public boolean hasProject(ProjectSetupParam setupParam) {
 		return workspace.getProjectDir(setupParam.getName()).isDirectory();
@@ -175,14 +161,14 @@ public class CTRMapIDEHelper {
 		loadedProjects.put(projectDir, project);
 		return project;
 	}
-        
-         public IDEFile getScriptByProject(ProjectSetupParam params, IDEProject project, String name) {
-            IDEFile mainClassFile = project.getExistingFile(name);
-            if (!mainClassFile.exists()) {
-                mainClassFile.setBytes(params.getMainClassBytes());
-            }
-            return mainClassFile;
-        }
+
+	public IDEFile getScriptByProject(ProjectSetupParam params, IDEProject project, String name) {
+		IDEFile mainClassFile = project.getExistingFile(name);
+		if (!mainClassFile.exists()) {
+			mainClassFile.setBytes(params.getMainClassBytes());
+		}
+		return mainClassFile;
+	}
 
 	public void openProjectInIDE(IDEProject project) {
 		getIDE().openProject(project);
@@ -199,11 +185,11 @@ public class CTRMapIDEHelper {
 		}
 		return ide;
 	}
-        
-        public void setIDE(PSIDE ide) {
-            this.ide = ide;
-	    ide.loadWorkspace(workspace);
-        }
+
+	public void setIDE(PSIDE ide) {
+		this.ide = ide;
+		ide.loadWorkspace(workspace);
+	}
 
 	public VCommandDataBase createCombCommandDB(int... overlayIds) {
 		List<VCommandDataBase> databases = new ArrayList<>();
