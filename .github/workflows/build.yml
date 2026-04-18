@@ -2,9 +2,9 @@ name: Build CTRMap-CE
 
 on:
   push:
-    branches: [main, master, maven]
+    branches: [main, dev]
   pull_request:
-    branches: [main, master, maven]
+    branches: [main, dev]
 
 permissions:
   contents: write
@@ -31,7 +31,7 @@ jobs:
         run: |
           DATE=$(date -u +'%Y%m%d')
           COMMIT=${GITHUB_SHA::7}
-          if [[ "$GITHUB_REF" == "refs/heads/main" || "$GITHUB_REF" == "refs/heads/master" ]]; then
+          if [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
             TYPE=stable
           else
             TYPE=nightly
@@ -51,7 +51,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Create Nightly Release
-        if: github.event_name == 'push' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -64,7 +64,7 @@ jobs:
             ctrmap-ce/target/ctrmap-ce-*.jar
 
       - name: Create Stable Release
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
