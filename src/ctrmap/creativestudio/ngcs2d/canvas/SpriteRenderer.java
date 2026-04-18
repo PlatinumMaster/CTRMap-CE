@@ -302,10 +302,14 @@ public class SpriteRenderer {
 		int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
 		int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE;
 		for (Sprite2DOAM oam : cell.oams) {
-			minX = Math.min(minX, oam.x);
-			minY = Math.min(minY, oam.y);
-			maxX = Math.max(maxX, oam.x + oam.width);
-			maxY = Math.max(maxY, oam.y + oam.height);
+			// doubleSize OAMs store the top-left of their 2x area in (x,y),
+			// content is centered (w/2, h/2) inside. Union the content bbox.
+			int cx = oam.x + oam.getContentOffsetX();
+			int cy = oam.y + oam.getContentOffsetY();
+			minX = Math.min(minX, cx);
+			minY = Math.min(minY, cy);
+			maxX = Math.max(maxX, cx + oam.width);
+			maxY = Math.max(maxY, cy + oam.height);
 		}
 
 		int imgW = maxX - minX;
@@ -321,7 +325,9 @@ public class SpriteRenderer {
 		for (int i = cell.oams.size() - 1; i >= 0; i--) {
 			Sprite2DOAM oam = cell.oams.get(i);
 			BufferedImage oamImg = renderOAM(oam, tileSheet, palette, mappingMode, cell);
-			g.drawImage(oamImg, oam.x - minX, oam.y - minY, null);
+			int dx = oam.x + oam.getContentOffsetX() - minX;
+			int dy = oam.y + oam.getContentOffsetY() - minY;
+			g.drawImage(oamImg, dx, dy, null);
 		}
 
 		g.dispose();
@@ -568,8 +574,11 @@ public class SpriteRenderer {
 			int baseX = entry.x + r.translateX;
 			int baseY = entry.y + r.translateY;
 			for (Sprite2DOAM oam : r.cell.oams) {
-				int x0 = oam.x + baseX;
-				int y0 = oam.y + baseY;
+				// For doubleSize OAMs, oam.(x,y) is the top-left of the
+				// DS 2x rendering area; the content sits (w/2, h/2) inside
+				// that. Union the content bbox, not the outer box.
+				int x0 = oam.x + baseX + oam.getContentOffsetX();
+				int y0 = oam.y + baseY + oam.getContentOffsetY();
 				int x1 = x0 + oam.width;
 				int y1 = y0 + oam.height;
 				if (x0 < unionMinX) unionMinX = x0;
@@ -609,8 +618,10 @@ public class SpriteRenderer {
 			for (int oi = r.cell.oams.size() - 1; oi >= 0; oi--) {
 				Sprite2DOAM oam = r.cell.oams.get(oi);
 				BufferedImage oamImg = renderOAM(oam, ts, pal, mappingMode, r.cell);
-				int dx = oam.x + baseX - unionMinX;
-				int dy = oam.y + baseY - unionMinY;
+				// doubleSize: OAM position is top-left of 2x area; content
+				// is centered inside, so shift by (w/2, h/2).
+				int dx = oam.x + baseX + oam.getContentOffsetX() - unionMinX;
+				int dy = oam.y + baseY + oam.getContentOffsetY() - unionMinY;
 				g.drawImage(oamImg, dx, dy, null);
 			}
 		}
