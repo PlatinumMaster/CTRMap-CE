@@ -81,15 +81,16 @@ public class SpriteRenderer {
 		//   1D mapping → index = ncgrStart + tx + ty * tilesW
 		//                (sequential, row pitch = OBJ tile width)
 		//
-		// BITMAP OVERRIDE: bitmap-mode NCGRs (NitroPaint "type == 1", i.e.
-		// linear raster on disk) are unswizzled by the parser into a
-		// tile-major 2D grid whose row stride is the NCGR's tileWidth. An
-		// OAM referencing such a sheet must therefore use the NCGR row
-		// stride regardless of what the NCER mapping mode claims — the raw
-		// tile stream is already 2D in memory. Without this override a
-		// 1D-mapped NCER paired with a bitmap-mode NCGR fragments sprites
-		// (OAM stride 8 vs raster stride 32 for Pokemon B/W battle sprites),
-		// which produced the Cyndaquil Cell_0 "head + paw" corruption.
+		// Tile-walk stride — mirrors NitroPaint's CellRenderOBJ:
+		//   2D mapping → step down by NCGR's 2D grid width.
+		//   1D mapping → step down by the OAM's OWN tile width (each OAM's
+		//                 tiles are stored sequentially in VRAM).
+		// BITMAP OVERRIDE: when the NCGR was stored as a raster bitmap
+		// (rasterLayout=true), the tile buffer is pre-arranged as a 2D
+		// grid whose row stride is the NCGR's tileWidth regardless of
+		// what the NCER claims. An OAM addressing such a sheet must use
+		// that grid stride — using OAM stride would fragment the sprite
+		// (Cyndaquil Cell_0 rendered as "head + paw").
 		boolean is2D = (mappingMode == Sprite2DResource.MAPPING_MODE_2D);
 		boolean useNcgrStride = is2D || tileSheet.rasterLayout;
 		int rowStride;

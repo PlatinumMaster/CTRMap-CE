@@ -84,27 +84,28 @@ public class Sprite2DResourceTileSheetTest {
     }
 
     @Test
-    public void oneDMode_doesNotDisturbExistingOrder() {
-        // Trainer sprite case: NCER advertises 1D mapping and ships a
-        // single raster NCGR. Only one sheet, no preference change.
+    public void oneDMode_prefersNonRasterLayout() {
+        // BW/BW2 trainer sprites with 1D NCER mapping address the NCBR
+        // (tiled, rasterLayout=false), not the NCGR (raster, rasterLayout=
+        // true). Must pick the non-raster sheet even when raster is first.
+        Sprite2DResource res = new Sprite2DResource();
+        res.mappingMode = Sprite2DResource.MAPPING_MODE_1D_64K;
+        Sprite2DTileSheet ncgr = makeTileSheet("ncgr", true);
+        Sprite2DTileSheet ncbr = makeTileSheet("ncbr", false);
+        res.tileSheets.add(ncgr);
+        res.tileSheets.add(ncbr);
+        assertSame("1D must pick non-raster sheet (NCBR)",
+            ncbr, res.getActiveTileSheet());
+    }
+
+    @Test
+    public void oneDMode_singleRasterSheet_fallsBackToFirst() {
+        // Only a raster sheet available — fall back instead of returning
+        // null so single-sheet 1D resources keep working (legacy data).
         Sprite2DResource res = new Sprite2DResource();
         res.mappingMode = Sprite2DResource.MAPPING_MODE_1D_64K;
         Sprite2DTileSheet only = makeTileSheet("trainer", true);
         res.tileSheets.add(only);
         assertSame(only, res.getActiveTileSheet());
-    }
-
-    @Test
-    public void oneDMode_withTwoSheets_picksFirst() {
-        // Never-seen-in-the-wild 1D multi-NCGR case: no reason to prefer
-        // the raster sheet since we're not in the 2D Pokemon-battle model.
-        Sprite2DResource res = new Sprite2DResource();
-        res.mappingMode = Sprite2DResource.MAPPING_MODE_1D_32K;
-        Sprite2DTileSheet a = makeTileSheet("a", false);
-        Sprite2DTileSheet b = makeTileSheet("b", true);
-        res.tileSheets.add(a);
-        res.tileSheets.add(b);
-        assertSame("1D mapping keeps legacy first-sheet behavior",
-            a, res.getActiveTileSheet());
     }
 }

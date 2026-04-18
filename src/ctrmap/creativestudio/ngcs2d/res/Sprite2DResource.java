@@ -238,14 +238,21 @@ public class Sprite2DResource {
 		if (tileSheets.isEmpty()) {
 			return null;
 		}
-		// 2D-mapped NCERs (BW/BW2 Pokemon) address the unswizzled raster
-		// NCGR. When we loaded both the raster and the tiled fragment sheet,
-		// only the raster one will produce a coherent composed sprite.
-		if (mappingMode == MAPPING_MODE_2D) {
-			for (Sprite2DTileSheet ts : tileSheets) {
-				if (ts.rasterLayout) {
-					return ts;
-				}
+		// BW/BW2 sprite NARCs often ship TWO character blocks per sprite:
+		//   - a raster-layout bitmap NCGR (rasterLayout=true),
+		//   - a tiled/1D NCBR (rasterLayout=false).
+		// Which one the NCER's OAM tileIndex values actually address is
+		// determined by the NCER's own mapping mode:
+		//   2D mapping  → raster / NCGR     (Pokemon battle sprites, some
+		//                                    trainer dancer sprites)
+		//   1D mappings → tiled / NCBR      (most BW/BW2 trainer sprites)
+		// Pick the matching sheet; if only one is loaded, return it. If
+		// neither matches the preference, fall back to the first sheet so
+		// single-sheet resources keep working.
+		boolean want2D = (mappingMode == MAPPING_MODE_2D);
+		for (Sprite2DTileSheet ts : tileSheets) {
+			if (ts.rasterLayout == want2D) {
+				return ts;
 			}
 		}
 		return tileSheets.get(0);
