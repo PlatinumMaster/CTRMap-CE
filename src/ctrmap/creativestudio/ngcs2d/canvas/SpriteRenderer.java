@@ -337,7 +337,10 @@ public class SpriteRenderer {
 		if (cell == null || res == null || res.tileSheets.isEmpty() || res.palettes.isEmpty()) {
 			return EMPTY;
 		}
-		return renderCell(cell, res.tileSheets.get(0), res.palettes.get(0), res.mappingMode);
+		// Use getActiveTileSheet so multi-NCGR resources (BW/BW2 Pokemon
+		// battle sprites that ship both a raster bitmap and a tiled
+		// fragment sheet) pick the raster one the NCER actually addresses.
+		return renderCell(cell, res.getActiveTileSheet(), res.palettes.get(0), res.mappingMode);
 	}
 
 	/**
@@ -365,7 +368,7 @@ public class SpriteRenderer {
 		if (res.tileSheets.isEmpty() || res.palettes.isEmpty()) {
 			return EMPTY;
 		}
-		BufferedImage cellImg = renderCell(cell, res.tileSheets.get(0), res.palettes.get(0), res.mappingMode);
+		BufferedImage cellImg = renderCell(cell, res.getActiveTileSheet(), res.palettes.get(0), res.mappingMode);
 		if (cellImg == EMPTY) {
 			return EMPTY;
 		}
@@ -592,7 +595,7 @@ public class SpriteRenderer {
 		// the first multi-cell entry ends up drawn last (on top), and
 		// within each entry iterate OAMs in reverse so OAM #0 ends up
 		// drawn last (on top) — both matching NitroPaint's loops.
-		Sprite2DTileSheet ts = res.tileSheets.get(0);
+		Sprite2DTileSheet ts = res.getActiveTileSheet();
 		Sprite2DPalette pal = res.palettes.get(0);
 		int mappingMode = res.mappingMode;
 		for (int i = n - 1; i >= 0; i--) {

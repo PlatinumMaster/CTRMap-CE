@@ -214,6 +214,44 @@ public class Sprite2DResource {
 	}
 
 	/**
+	 * Picks the tile sheet that the loaded {@link #cells} (and therefore the
+	 * loaded NCER / NMCR) are actually designed to address.
+	 *
+	 * <p>BW / BW2 Pokemon battle sprite NARCs ship <em>two</em> NCGRs per
+	 * species: a <b>bitmap / raster-layout</b> NCGR (e.g. 16 KB, 512 tiles,
+	 * {@code rasterLayout = true}) and a smaller tiled NCGR (e.g. 4 KB, 144
+	 * tiles, {@code rasterLayout = false}) used as body-part fragments for
+	 * specific animations. The NCER's OAM {@code tileIndex} values address
+	 * the raster-layout sheet — rendering a cell against the fragment sheet
+	 * produces the "scattered pieces" artifact (Bulbasaur rendered as a
+	 * small broken fragment instead of a full Pokemon).</p>
+	 *
+	 * <p>Selection rule: when the NCER requested 2D OAM mapping (the BW+
+	 * Pokemon battle case) and a raster-layout sheet is present, prefer it.
+	 * Otherwise fall back to {@code tileSheets.get(0)} so single-sheet
+	 * resources (trainers, icons, classic 1D NCGRs) keep working.</p>
+	 *
+	 * @return the preferred tile sheet for rendering, or {@code null} if
+	 *         the resource has no tile sheets.
+	 */
+	public Sprite2DTileSheet getActiveTileSheet() {
+		if (tileSheets.isEmpty()) {
+			return null;
+		}
+		// 2D-mapped NCERs (BW/BW2 Pokemon) address the unswizzled raster
+		// NCGR. When we loaded both the raster and the tiled fragment sheet,
+		// only the raster one will produce a coherent composed sprite.
+		if (mappingMode == MAPPING_MODE_2D) {
+			for (Sprite2DTileSheet ts : tileSheets) {
+				if (ts.rasterLayout) {
+					return ts;
+				}
+			}
+		}
+		return tileSheets.get(0);
+	}
+
+	/**
 	 * Derives a sensible OBJ-size for every 1D / lineal-mapped tile sheet
 	 * by inspecting the most common OAM size in the cell list.
 	 *
