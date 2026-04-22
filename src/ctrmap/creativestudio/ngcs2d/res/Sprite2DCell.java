@@ -98,4 +98,21 @@ public class Sprite2DCell implements INamed {
 			oams.remove(index);
 		}
 	}
+
+	/**
+	 * Returns only the OAMs whose {@link Sprite2DOAM#visible} flag is set,
+	 * preserving stack order. Used by both the canvas preview (to skip
+	 * hidden layers) and the NITRO export (to omit them from the NCER).
+	 * Returns a fresh list — callers may mutate it without affecting the
+	 * cell's full OAM list.
+	 */
+	public List<Sprite2DOAM> getVisibleOAMs() {
+		List<Sprite2DOAM> out = new ArrayList<>(oams.size());
+		for (Sprite2DOAM o : oams) {
+			if (o != null && o.visible) {
+				out.add(o);
+			}
+		}
+		return out;
+	}
 }

@@ -1,11 +1,13 @@
 package ctrmap.creativestudio.ngcs2d.res;
 
+import ctrmap.creativestudio.ngcs2d.layers.LayerItem;
+
 /**
  * Game-agnostic OAM (Object Attribute Memory) entry representing one sprite
  * object within a cell. Each OAM maps a rectangular region of tiles from
  * the tile sheet onto the screen at a signed pixel position.
  */
-public class Sprite2DOAM {
+public class Sprite2DOAM implements LayerItem {
 
 	/**
 	 * Signed pixel X position of this object relative to the cell origin.
@@ -79,6 +81,43 @@ public class Sprite2DOAM {
 	 */
 	public int rsParamIndex;
 
+	// ---------------------------------------------------------------------
+	// Editor-only layer metadata. Not represented in NITRO on-disk formats;
+	// purely decorative fields the CS 2D UI layers on top of OAMs so the
+	// user can organise them like Photoshop layers. Persisted in the
+	// .cs2dproj project file (future phase); dropped on NITRO export
+	// (via {@link Sprite2DCell#getVisibleOAMs()} et al).
+	// ---------------------------------------------------------------------
+
+	/**
+	 * User-facing name for this OAM when it's treated as a layer in the
+	 * CS 2D layer panel. {@code null} means "use default" (the panel
+	 * synthesises "Layer N" from the stack index).
+	 */
+	public String layerName;
+
+	/**
+	 * Whether this OAM participates in the rendered output. Hidden OAMs
+	 * are skipped by the canvas preview <strong>and</strong> omitted from
+	 * the NITRO export. Default: {@code true}.
+	 */
+	public boolean visible = true;
+
+	/**
+	 * Layer opacity, 0.0 (fully transparent) to 1.0 (fully opaque).
+	 * The NITRO format cannot encode partial opacity, so on export a
+	 * non-1.0 opacity is a lossy hint — the OAM is written as fully
+	 * opaque. The canvas preview honours it. Default: 1.0.
+	 */
+	public float opacity = 1.0f;
+
+	/**
+	 * When {@code true}, the canvas tools and layer panel refuse to
+	 * mutate this OAM. Purely a UI guard — still participates in render
+	 * and export. Default: {@code false}.
+	 */
+	public boolean locked = false;
+
 	/**
 	 * Constructs a default OAM entry with an 8x8 size.
 	 */
@@ -88,7 +127,8 @@ public class Sprite2DOAM {
 	}
 
 	/**
-	 * Copy constructor. Deep-copies all fields from the source OAM entry.
+	 * Copy constructor. Deep-copies all fields from the source OAM entry,
+	 * including editor-only layer metadata.
 	 *
 	 * @param src The source OAM entry to copy.
 	 */
@@ -105,6 +145,10 @@ public class Sprite2DOAM {
 		rotationScaling = src.rotationScaling;
 		doubleSize = src.doubleSize;
 		rsParamIndex = src.rsParamIndex;
+		layerName = src.layerName;
+		visible = src.visible;
+		opacity = src.opacity;
+		locked = src.locked;
 	}
 
 	/**
@@ -121,4 +165,15 @@ public class Sprite2DOAM {
 	public int getContentOffsetY() {
 		return doubleSize ? (height / 2) : 0;
 	}
+
+	// --- LayerItem interface (field-backed, trivial) ---
+
+	@Override public String getLayerName() { return layerName; }
+	@Override public void setLayerName(String name) { this.layerName = name; }
+	@Override public boolean isVisible() { return visible; }
+	@Override public void setVisible(boolean visible) { this.visible = visible; }
+	@Override public float getOpacity() { return opacity; }
+	@Override public void setOpacity(float opacity) { this.opacity = opacity; }
+	@Override public boolean isLocked() { return locked; }
+	@Override public void setLocked(boolean locked) { this.locked = locked; }
 }

@@ -300,9 +300,16 @@ public class SpriteRenderer {
 			return EMPTY;
 		}
 
+		// Visible-OAM filter applied up front: hidden layers contribute
+		// neither bbox pixels nor draw calls.
+		java.util.List<Sprite2DOAM> visible = cell.getVisibleOAMs();
+		if (visible.isEmpty()) {
+			return EMPTY;
+		}
+
 		int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
 		int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE;
-		for (Sprite2DOAM oam : cell.oams) {
+		for (Sprite2DOAM oam : visible) {
 			// doubleSize OAMs store the top-left of their 2x area in (x,y),
 			// content is centered (w/2, h/2) inside. Union the content bbox.
 			int cx = oam.x + oam.getContentOffsetX();
@@ -323,12 +330,23 @@ public class SpriteRenderer {
 		BufferedImage img = new BufferedImage(imgW, imgH, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = img.createGraphics();
 
-		for (int i = cell.oams.size() - 1; i >= 0; i--) {
-			Sprite2DOAM oam = cell.oams.get(i);
+		for (int i = visible.size() - 1; i >= 0; i--) {
+			Sprite2DOAM oam = visible.get(i);
 			BufferedImage oamImg = renderOAM(oam, tileSheet, palette, mappingMode, cell);
 			int dx = oam.x + oam.getContentOffsetX() - minX;
 			int dy = oam.y + oam.getContentOffsetY() - minY;
-			g.drawImage(oamImg, dx, dy, null);
+			// Layer opacity: fold into the composite. NITRO can't encode
+			// partial alpha, so this only affects the editor preview —
+			// the NCER export emits full-opacity OAMs regardless.
+			if (oam.opacity < 1.0f) {
+				java.awt.Composite prev = g.getComposite();
+				g.setComposite(java.awt.AlphaComposite.getInstance(
+					java.awt.AlphaComposite.SRC_OVER, Math.max(0f, oam.opacity)));
+				g.drawImage(oamImg, dx, dy, null);
+				g.setComposite(prev);
+			} else {
+				g.drawImage(oamImg, dx, dy, null);
+			}
 		}
 
 		g.dispose();
@@ -563,6 +581,10 @@ public class SpriteRenderer {
 		// the unified OAM coord space (oam.x + entry.x + frame.translateX,
 		// oam.y + entry.y + frame.translateY). This is the bbox we need to
 		// allocate for the output image.
+		//
+		// Entries and OAMs that are hidden (visible=false, set via the
+		// layer panel) contribute nothing to the bbox and are skipped in
+		// the composite pass below.
 		int unionMinX = Integer.MAX_VALUE, unionMinY = Integer.MAX_VALUE;
 		int unionMaxX = Integer.MIN_VALUE, unionMaxY = Integer.MIN_VALUE;
 		boolean any = false;
@@ -572,9 +594,15 @@ public class SpriteRenderer {
 				continue;
 			}
 			Sprite2DMultiCell.MultiCellEntry entry = mc.entries.get(i);
+			if (!entry.visible) {
+				continue;
+			}
 			int baseX = entry.x + r.translateX;
 			int baseY = entry.y + r.translateY;
 			for (Sprite2DOAM oam : r.cell.oams) {
+				if (!oam.visible) {
+					continue;
+				}
 				// For doubleSize OAMs, oam.(x,y) is the top-left of the
 				// DS 2x rendering area; the content sits (w/2, h/2) inside
 				// that. Union the content bbox, not the outer box.
@@ -614,16 +642,33 @@ public class SpriteRenderer {
 				continue;
 			}
 			Sprite2DMultiCell.MultiCellEntry entry = mc.entries.get(i);
+			if (!entry.visible) {
+				continue;
+			}
 			int baseX = entry.x + r.translateX;
 			int baseY = entry.y + r.translateY;
+			// Effective composite alpha = entry.opacity × oam.opacity.
+			// Both default to 1.0 so the common path takes the else branch.
 			for (int oi = r.cell.oams.size() - 1; oi >= 0; oi--) {
 				Sprite2DOAM oam = r.cell.oams.get(oi);
+				if (!oam.visible) {
+					continue;
+				}
 				BufferedImage oamImg = renderOAM(oam, ts, pal, mappingMode, r.cell);
 				// doubleSize: OAM position is top-left of 2x area; content
 				// is centered inside, so shift by (w/2, h/2).
 				int dx = oam.x + baseX + oam.getContentOffsetX() - unionMinX;
 				int dy = oam.y + baseY + oam.getContentOffsetY() - unionMinY;
-				g.drawImage(oamImg, dx, dy, null);
+				float alpha = Math.max(0f, Math.min(1f, entry.opacity * oam.opacity));
+				if (alpha < 1.0f) {
+					java.awt.Composite prev = g.getComposite();
+					g.setComposite(java.awt.AlphaComposite.getInstance(
+						java.awt.AlphaComposite.SRC_OVER, alpha));
+					g.drawImage(oamImg, dx, dy, null);
+					g.setComposite(prev);
+				} else {
+					g.drawImage(oamImg, dx, dy, null);
+				}
 			}
 		}
 		g.dispose();
@@ -640,11 +685,16 @@ public class SpriteRenderer {
 			if (r == null || r.cell == null || r.cell.oams.isEmpty()) {
 				continue;
 			}
+			Sprite2DMultiCell.MultiCellEntry entry = mc.entries.get(i);
+			if (!entry.visible) {
+				// Hidden entries don't contribute a hit-test rect — the
+				// Move tool can't grab something the user can't see.
+				continue;
+			}
 			int[] bbox = cellOAMBounds(r.cell);
 			if (bbox == null) {
 				continue;
 			}
-			Sprite2DMultiCell.MultiCellEntry entry = mc.entries.get(i);
 			int drawX = (entry.x + r.translateX + bbox[0]) - unionMinX;
 			int drawY = (entry.y + r.translateY + bbox[1]) - unionMinY;
 			int w = bbox[2] - bbox[0];
@@ -668,11 +718,30 @@ public class SpriteRenderer {
 		}
 		int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
 		int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE;
+		boolean any = false;
 		for (Sprite2DOAM oam : cell.oams) {
-			if (oam.x < minX) minX = oam.x;
-			if (oam.y < minY) minY = oam.y;
-			if (oam.x + oam.width > maxX) maxX = oam.x + oam.width;
-			if (oam.y + oam.height > maxY) maxY = oam.y + oam.height;
+			if (!oam.visible) {
+				continue; // hidden layers don't contribute to the hit-test bbox
+			}
+			// OAMs with doubleSize=true store the top-left of a 2x
+			// rendering area in (x,y) while the actual content sits
+			// centred at (x + width/2, y + height/2). cellOAMBounds
+			// previously ignored this shift, so hit-test rects (and
+			// now the Layers-panel selection highlight) were drawn a
+			// half-OAM-width to the LEFT of where the content actually
+			// rendered — visible as an off-target box around animated
+			// body parts whose sub-cell used doubleSize OAMs. Apply
+			// contentOffsetX/Y consistently with the render loop.
+			int cx = oam.x + oam.getContentOffsetX();
+			int cy = oam.y + oam.getContentOffsetY();
+			if (cx < minX) minX = cx;
+			if (cy < minY) minY = cy;
+			if (cx + oam.width > maxX) maxX = cx + oam.width;
+			if (cy + oam.height > maxY) maxY = cy + oam.height;
+			any = true;
+		}
+		if (!any) {
+			return null;
 		}
 		return new int[] { minX, minY, maxX, maxY };
 	}

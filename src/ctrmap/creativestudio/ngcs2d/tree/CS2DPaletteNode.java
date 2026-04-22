@@ -1,5 +1,6 @@
 package ctrmap.creativestudio.ngcs2d.tree;
 
+import ctrmap.creativestudio.editors.IEditor;
 import ctrmap.creativestudio.ngcs2d.res.Sprite2DPalette;
 import xstandard.util.ListenableList;
 
@@ -49,5 +50,10 @@ public class CS2DPaletteNode extends CS2DNode {
 	@Override
 	public ListenableList getParentList() {
 		return getCS().getResource().palettes;
+	}
+
+	@Override
+	public IEditor getEditor() {
+		return getCS().getEditorController().paletteEditor;
 	}
 }

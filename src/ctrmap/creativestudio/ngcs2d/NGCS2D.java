@@ -15,6 +15,12 @@ import ctrmap.creativestudio.ngcs2d.canvas.tools.Sprite2DBaseTool;
 import ctrmap.creativestudio.ngcs2d.canvas.tools.Sprite2DTool;
 import ctrmap.creativestudio.ngcs2d.canvas.undo.SpriteUndoManager;
 import ctrmap.creativestudio.ngcs2d.io.I2DFormatHandler;
+import ctrmap.creativestudio.ngcs2d.layers.LayerItem;
+import ctrmap.creativestudio.ngcs2d.layers.LayersPanel;
+import ctrmap.creativestudio.ngcs2d.project.AnimatedGifWriter;
+import ctrmap.creativestudio.ngcs2d.project.Cs2dProject;
+import ctrmap.creativestudio.ngcs2d.project.Cs2dProjectIO;
+import ctrmap.creativestudio.ngcs2d.timeline.TimelinePanel;
 import ctrmap.creativestudio.ngcs2d.io.NGCS2DImporter;
 import ctrmap.creativestudio.ngcs2d.plugins.NGCS2DStandardIOPlugin;
 import ctrmap.creativestudio.ngcs2d.res.Sprite2DCell;
@@ -43,6 +49,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
@@ -51,15 +58,18 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.BorderFactory;
+import javax.swing.BoxLayout;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
+import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.event.TreeSelectionEvent;
 import javax.swing.tree.TreeNode;
@@ -125,6 +135,53 @@ public class NGCS2D extends JFrame implements NGCS2DContentAccessor {
 	private NGCS2DEmbeddedCallback embeddedCallback;
 	private JLabel statusBar;
 
+	/** Photoshop-style Layers panel bound to whichever cell the tree
+	 *  selection points at. Empty placeholder when a non-cell node (or
+	 *  nothing) is selected. */
+	private LayersPanel layersPanel;
+
+	/** Vegas-style keyframe timeline bound to the selected cell-
+	 *  animation or multi-cell-animation. Sits between the canvas and
+	 *  the play/pause controls, replacing the linear frame slider as
+	 *  the primary scrubber. */
+	private TimelinePanel timelinePanel;
+
+	/** Menu item for the explicit embedded-mode save. Only enabled when an
+	 *  embedded callback is wired; greyed out in standalone use. */
+	private JMenuItem applyToRomItem;
+
+	/** Snapshot of {@link SpriteUndoManager#getModCount()} at the moment of
+	 *  the last successful Apply-to-ROM. If the current modCount differs,
+	 *  the session has unsaved edits — used to drive the close prompt and
+	 *  the {@code *} title-bar dirty indicator. */
+	private int lastAppliedModCount = 0;
+
+	/** Companion to {@link #lastAppliedModCount} — modCount snapshot from
+	 *  the last successful project (YAML+PNG) save. The session is "clean"
+	 *  when the live modCount matches <em>either</em> snapshot, so a
+	 *  Save-Project alone is enough to clear the {@code *} marker even
+	 *  without an Apply-to-ROM. */
+	private int lastSavedProjectModCount = 0;
+
+	/** Directory the project was last loaded-from / saved-to. Drives the
+	 *  Project → Save shortcut (which writes back here) and disables it
+	 *  until the user does Save As at least once. {@code null} = no
+	 *  project file is associated with the session yet. */
+	private FSFile currentProjectDir;
+
+	/** Project menu items that depend on having a {@link #currentProjectDir} —
+	 *  re-evaluated by {@link #refreshProjectMenuState()}. */
+	private JMenuItem saveProjectItem;
+
+	/** Export menu item enabled only when the tree selection is a cell- or
+	 *  multi-cell-animation node (the only nodes whose content is meaningful
+	 *  to flatten into a GIF). */
+	private JMenuItem exportGifItem;
+
+	/** Title without the dirty marker. {@link #refreshTitle()} toggles a
+	 *  leading "{@code *}" based on {@link #isDirty()}. */
+	private String baseTitle = "CTRMap Creative Studio 2D";
+
 	/**
 	 * Creates the CreativeStudio 2D window in standalone mode.
 	 *
@@ -146,7 +203,23 @@ public class NGCS2D extends JFrame implements NGCS2DContentAccessor {
 
 		editorScrollPane.getVerticalScrollBar().setUnitIncrement(20);
 
-		editors = new NGCS2DEditorController();
+		editors = new NGCS2DEditorController(undoManager);
+
+		// Inject the shared UI singletons into the editors that host
+		// them. The multi-cell editor displays the Photoshop-style
+		// layer panel; both animation editors display the Vegas-style
+		// timeline + the same play/pause/stop/step controls. The
+		// NCGR/NCER property inspectors get the resource (for the
+		// palette picker + resource-wide mapping mode) and a canvas-
+		// refresh hook so their own previews stay in sync with the
+		// main canvas after every edit. The cell editor also reuses
+		// the shared layers panel to display its OAM stack.
+		editors.multiCellEditor.setLayersPanel(layersPanel);
+		editors.cellAnimEditor.attachComponents(timelinePanel, animControlPanel);
+		editors.multiCellAnimEditor.attachComponents(timelinePanel, animControlPanel);
+		editors.tileSheetEditor.attachContext(resource, canvas::refreshRender);
+		editors.cellEditor.attachContext(resource, canvas::refreshRender);
+		editors.cellEditor.setLayersPanel(layersPanel);
 
 		dataTree.initTree(this, resource);
 
@@ -159,8 +232,11 @@ public class NGCS2D extends JFrame implements NGCS2DContentAccessor {
 			} else {
 				editors.switchEditor(null, null, editorContainer);
 				canvas.showNothing();
+				if (layersPanel != null) layersPanel.clear();
+				if (timelinePanel != null) timelinePanel.clear();
 			}
 			lastSelectedNode = node;
+			refreshExportMenuState();
 		});
 		editors.switchEditor(null, null, editorContainer);
 		dataTree.expandRow(0);
@@ -190,14 +266,29 @@ public class NGCS2D extends JFrame implements NGCS2DContentAccessor {
 
 		addWindowListener(new WindowAdapter() {
 			@Override
+			public void windowClosing(WindowEvent e) {
+				attemptClose();
+			}
+
+			@Override
 			public void windowClosed(WindowEvent e) {
 				NGCS2DJulietHelper.onCSWindowClose(NGCS2D.this);
 			}
 		});
 
-		setSize(1200, 800);
+		// Keep the "*" title-bar dirty indicator in sync with edits as
+		// they land. fireModCountChanged() dispatches on the EDT (the
+		// edit path is already EDT), so it's safe to touch setTitle().
+		undoManager.addModCountListener(this::refreshTitle);
+
+		setSize(1600, 1000);
 		setLocationRelativeTo(null);
-		setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+		// DO_NOTHING_ON_CLOSE so attemptClose() can interpose a save-prompt
+		// in embedded mode. attemptClose() calls dispose() on its own once
+		// the user has resolved pending edits (or if there aren't any).
+		setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+
+		refreshTitle();
 	}
 
 	/**
@@ -212,15 +303,18 @@ public class NGCS2D extends JFrame implements NGCS2DContentAccessor {
 		this();
 		this.embeddedCallback = callback;
 		merge(source);
-		setTitle("CTRMap Creative Studio 2D - Embedded Mode");
-		addWindowListener(new WindowAdapter() {
-			@Override
-			public void windowClosing(WindowEvent e) {
-				if (embeddedCallback != null) {
-					embeddedCallback.onSave(resource);
-				}
-			}
-		});
+		baseTitle = "CTRMap Creative Studio 2D - Embedded Mode";
+		// The unified close-attempt handler installed in the standalone
+		// constructor already knows how to prompt when there are unsaved
+		// edits in embedded mode — no extra windowClosing listener needed.
+		// Enable the explicit Apply-to-ROM menu item now that a callback
+		// is wired up.
+		if (applyToRomItem != null) {
+			applyToRomItem.setEnabled(true);
+		}
+		// Clean slate: a freshly-merged source has no pending edits.
+		lastAppliedModCount = undoManager.getModCount();
+		refreshTitle();
 	}
 
 	// -------------------------------------------------------------------------
@@ -251,35 +345,41 @@ public class NGCS2D extends JFrame implements NGCS2DContentAccessor {
 		//Sprite canvas (real 2D viewport)
 		canvas = new SpriteCanvas();
 		canvas.setMinimumSize(new Dimension(200, 200));
-		canvas.setPreferredSize(new Dimension(600, 500));
+		canvas.setPreferredSize(new Dimension(900, 750));
 
 		//Tool strip (left edge)
 		toolStrip = new SpriteToolStrip();
 		toolStrip.addToolChangeListener((ActionEvent e) -> activateSelectedTool());
 
-		//Animation playback controls (south of canvas). Drives the canvas
-		//frame index when previewing a cell / multi-cell animation, so the
-		//play / pause / step buttons actually advance the displayed frame.
+		//Animation playback: shared CS2DAnimControlPanel and TimelinePanel
+		//are created here but NOT mounted into the left canvas pane. They
+		//live inside the animation editors (CellAnimEditor /
+		//MultiCellAnimEditor) — see attachComponents() on those. Only the
+		//frame-change listeners wire back here so the canvas keeps
+		//re-rendering during playback.
 		animControlPanel = new CS2DAnimControlPanel();
 		animControlPanel.addFrameChangeListener(() -> {
 			if (canvas != null) {
-				// Forward both the outer frame index and the master tick
-				// counter. The multi-cell renderer uses the tick counter to
-				// drive each entry's sub-NANR independently so slots with
-				// different animation lengths stay in real-time sync.
 				canvas.setAnimationFrame(
 					animControlPanel.getCurrentFrame(),
 					animControlPanel.getElapsedTicks());
 			}
 		});
 
-		//Compose canvas + tool strip into a single left panel
+		timelinePanel = new TimelinePanel(undoManager);
+		timelinePanel.setPlayheadSource(animControlPanel::getElapsedTicks);
+		timelinePanel.setTickSeekListener(animControlPanel::seekToTick);
+		animControlPanel.addFrameChangeListener(timelinePanel::repaint);
+
+		//Compose canvas + tool strip into a single left panel. No south
+		//row — the timeline + play controls live inside the right-side
+		//inspector editors now, per the "one inspector for everything"
+		//redesign.
 		JPanel canvasPane = new JPanel(new BorderLayout());
 		canvasPane.add(toolStrip, BorderLayout.WEST);
 		canvasPane.add(canvas, BorderLayout.CENTER);
-		canvasPane.add(animControlPanel, BorderLayout.SOUTH);
 		canvasPane.setMinimumSize(new Dimension(320, 200));
-		canvasPane.setPreferredSize(new Dimension(720, 550));
+		canvasPane.setPreferredSize(new Dimension(1000, 800));
 
 		// Activate the default tool (pencil) so the canvas is editable
 		// straight after launch.
@@ -291,22 +391,48 @@ public class NGCS2D extends JFrame implements NGCS2DContentAccessor {
 		treeScrollPane.setMinimumSize(new Dimension(200, 150));
 		treeScrollPane.setPreferredSize(new Dimension(300, 350));
 
-		//Editor container
+		//Editor container — the SINGLE contextual inspector area on the
+		//right side. Whatever the tree selects, the matching editor
+		//(palette / tile sheet / cell / OAM / cell-anim / multi-cell /
+		//multi-cell-anim) is swapped into here by
+		//NGCS2DEditorController.switchEditor(). The Layers panel lives
+		//inside the multi-cell editor; the Timeline + play controls
+		//live inside the cell/multi-cell-animation editors.
 		editorContainer = new JPanel(new BorderLayout());
-		editorContainer.setMinimumSize(new Dimension(200, 100));
+		editorContainer.setMinimumSize(new Dimension(240, 200));
 		editorScrollPane = new JScrollPane(editorContainer);
-		editorScrollPane.setMinimumSize(new Dimension(200, 100));
-		editorScrollPane.setPreferredSize(new Dimension(300, 350));
+		editorScrollPane.setMinimumSize(new Dimension(240, 200));
+		editorScrollPane.setPreferredSize(new Dimension(320, 500));
 
-		//Right split: tree on top, editor on bottom
-		JSplitPane rightSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, treeScrollPane, editorScrollPane);
-		rightSplit.setDividerLocation(350);
-		rightSplit.setResizeWeight(0.5);
+		//Layers panel — shared singleton, owned by NGCS2D, mounted inside
+		//MultiCellEditor when a multi-cell is selected. The canvas
+		//refresh hook + single-selection listener are wired here once
+		//and reused for every multi-cell.
+		layersPanel = new LayersPanel(undoManager);
+		layersPanel.setCanvasRefresh(() -> {
+			if (canvas != null) canvas.refreshRender();
+		});
+		layersPanel.setSelectionListener((LayerItem item) -> {
+			if (canvas == null) return;
+			if (item instanceof Sprite2DMultiCell.MultiCellEntry) {
+				canvas.setHighlightedEntry((Sprite2DMultiCell.MultiCellEntry) item);
+			} else {
+				canvas.setHighlightedEntry(null);
+			}
+		});
+
+		//Right split: tree on top, single contextual inspector on the
+		//bottom. No more Layers/Timeline in a separate middle region —
+		//they're routed through the inspector's editor-swap mechanism.
+		JSplitPane rightSplit = new JSplitPane(
+			JSplitPane.VERTICAL_SPLIT, treeScrollPane, editorScrollPane);
+		rightSplit.setDividerLocation(260);
+		rightSplit.setResizeWeight(0.25);
 
 		//Main split: canvas+tool strip on left, right panel on right
 		JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, canvasPane, rightSplit);
-		mainSplit.setDividerLocation(680);
-		mainSplit.setResizeWeight(0.6);
+		mainSplit.setDividerLocation(1000);
+		mainSplit.setResizeWeight(0.7);
 
 		//Status bar
 		statusBar = new JLabel(" Ready");
@@ -326,6 +452,10 @@ public class NGCS2D extends JFrame implements NGCS2DContentAccessor {
 		JMenuItem newItem = new JMenuItem("New");
 		newItem.addActionListener((ActionEvent e) -> {
 			clear();
+			currentProjectDir = null;
+			lastSavedProjectModCount = undoManager.getModCount();
+			refreshProjectMenuState();
+			refreshTitle();
 		});
 		JMenuItem openSpriteItem = new JMenuItem("Open Sprite...");
 		openSpriteItem.setToolTipText("Open one or more sprite files (NCLR + NCGR + NCER, etc.) at once");
@@ -347,20 +477,272 @@ public class NGCS2D extends JFrame implements NGCS2DContentAccessor {
 		saveItem.addActionListener((ActionEvent e) -> {
 			editors.currentEditor.save();
 		});
+
+		JMenuItem openProjectItem = new JMenuItem("Open Project Folder...");
+		openProjectItem.setToolTipText(
+			"Load a CS2D project directory (YAML metadata + indexed PNG tile sheets).");
+		openProjectItem.addActionListener((ActionEvent e) -> openProjectFolder());
+
+		saveProjectItem = new JMenuItem("Save Project");
+		saveProjectItem.setToolTipText(
+			"Write the current resource back into the previously-loaded project folder.");
+		saveProjectItem.addActionListener((ActionEvent e) -> saveProject());
+
+		JMenuItem saveProjectAsItem = new JMenuItem("Save Project As...");
+		saveProjectAsItem.setToolTipText(
+			"Write the current resource as a CS2D project directory.");
+		saveProjectAsItem.addActionListener((ActionEvent e) -> saveProjectAs());
+
+		// Embedded-mode explicit write-back. In standalone mode this stays
+		// disabled (there's no callback to fire); the embedded constructor
+		// enables it once the caller's NGCS2DEmbeddedCallback is wired up.
+		// Ctrl+S is bound as an accelerator so the user doesn't have to
+		// drop into the menu every time.
+		applyToRomItem = new JMenuItem("Apply to ROM");
+		applyToRomItem.setAccelerator(KeyStroke.getKeyStroke(
+			KeyEvent.VK_S, java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+		applyToRomItem.setToolTipText(
+			"Write pending edits back to the host project (NARC / ROM). "
+			+ "Only available in embedded mode.");
+		applyToRomItem.addActionListener((ActionEvent e) -> applyEmbedded());
+		applyToRomItem.setEnabled(false);
+
 		projectMenu.add(newItem);
 		projectMenu.addSeparator();
 		projectMenu.add(openSpriteItem);
 		projectMenu.add(importGenericItem);
 		projectMenu.add(saveItem);
+		projectMenu.addSeparator();
+		projectMenu.add(openProjectItem);
+		projectMenu.add(saveProjectItem);
+		projectMenu.add(saveProjectAsItem);
+		projectMenu.addSeparator();
+		projectMenu.add(applyToRomItem);
 
 		JMenu importMenu = new JMenu("Import");
 		JMenu exportMenu = new JMenu("Export");
 		JMenu viewMenu = new JMenu("View");
 
+		exportGifItem = new JMenuItem("Export Animation as GIF...");
+		exportGifItem.setToolTipText(
+			"Export the selected cell or multi-cell animation as an animated GIF.");
+		exportGifItem.addActionListener((ActionEvent e) -> exportSelectedAnimAsGif());
+		exportGifItem.setEnabled(false);
+		exportMenu.add(exportGifItem);
+
 		menuBar.add(projectMenu);
 		menuBar.add(importMenu);
 		menuBar.add(exportMenu);
 		menuBar.add(viewMenu);
+
+		refreshProjectMenuState();
+	}
+
+	/** Toggles project-related menu items based on whether the session has
+	 *  a {@link #currentProjectDir} associated with it. */
+	private void refreshProjectMenuState() {
+		if (saveProjectItem != null) {
+			saveProjectItem.setEnabled(currentProjectDir != null);
+		}
+	}
+
+	/** Updates the {@link #exportGifItem} enabled state based on whether
+	 *  the current tree selection is an animation node. */
+	private void refreshExportMenuState() {
+		if (exportGifItem == null) return;
+		CS2DNode node = getSelectedNode();
+		Object content = node == null ? null : node.getContent();
+		exportGifItem.setEnabled(
+			content instanceof Sprite2DCellAnimation
+			|| content instanceof Sprite2DMultiCellAnimation);
+	}
+
+	// -------------------------------------------------------------------------
+	// Embedded-mode save flow
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Has the user made any edits since the last successful Apply? Compares
+	 * the live undo-manager modCount against the snapshot taken on apply
+	 * (or 0 if no apply has happened yet). Only meaningful in embedded
+	 * mode; standalone has no "applied" concept and this always reflects
+	 * whether any edits have happened since startup.
+	 */
+	private boolean isDirty() {
+		int now = undoManager.getModCount();
+		// Clean if the live modCount matches either persistence snapshot —
+		// the user only has to save to one of them to drop the dirty marker.
+		return now != lastAppliedModCount && now != lastSavedProjectModCount;
+	}
+
+	/**
+	 * Re-renders the title bar, prefixing with {@code "*"} when
+	 * {@link #isDirty()} is true. Called after every apply / close-attempt
+	 * path and at the end of both constructors.
+	 */
+	private void refreshTitle() {
+		setTitle((isDirty() ? "*" : "") + baseTitle);
+	}
+
+	/**
+	 * Fires the embedded callback and records a clean modCount snapshot
+	 * on success. No-op (with a status-bar warning) if the callback
+	 * refuses the save or if we're in standalone mode.
+	 */
+	private void applyEmbedded() {
+		if (embeddedCallback == null) {
+			statusBar.setText(" No host to apply to (standalone mode).");
+			return;
+		}
+		boolean ok = embeddedCallback.onSave(resource);
+		if (ok) {
+			lastAppliedModCount = undoManager.getModCount();
+			statusBar.setText(" Applied.");
+			refreshTitle();
+		} else {
+			statusBar.setText(" Apply failed — edits kept in memory.");
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// CS2D project (YAML + indexed PNG) save/load
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Prompts for a directory and loads a CS2D project from it. Replaces
+	 * the in-memory resource (clear + merge) so the existing tree
+	 * listeners and canvas refresh hooks pick up the new data.
+	 */
+	private void openProjectFolder() {
+		DiskFile dir = XFileDialog.openDirectoryDialog("Open Project Folder");
+		if (dir == null || !dir.exists() || !dir.isDirectory()) {
+			return;
+		}
+		try {
+			Cs2dProject project = Cs2dProjectIO.load(dir);
+			resource.clear();
+			resource.merge(project.resource);
+			resource.linkTileSheetsToCells();
+			reinitTree();
+			refreshCanvasResource();
+			refreshActiveToolResource();
+			currentProjectDir = dir;
+			lastSavedProjectModCount = undoManager.getModCount();
+			refreshProjectMenuState();
+			refreshTitle();
+			statusBar.setText(" Loaded project from " + dir.getName());
+		} catch (Exception ex) {
+			ex.printStackTrace();
+			JOptionPane.showMessageDialog(this,
+				"Failed to load project:\n" + ex.getMessage(),
+				"Open project", JOptionPane.ERROR_MESSAGE);
+		}
+	}
+
+	/** Re-saves into {@link #currentProjectDir}. No-op (with status message)
+	 *  if no project dir is associated with the session yet — Save As
+	 *  has to happen first. */
+	private void saveProject() {
+		if (currentProjectDir == null) {
+			statusBar.setText(" No project folder set — use Save Project As first.");
+			return;
+		}
+		writeProjectTo(currentProjectDir);
+	}
+
+	/** Prompts for a directory and saves the project there. The chosen
+	 *  directory becomes the new {@link #currentProjectDir}. */
+	private void saveProjectAs() {
+		DiskFile dir = XFileDialog.openDirectoryDialog("Save Project Folder");
+		if (dir == null) return;
+		writeProjectTo(dir);
+	}
+
+	private void writeProjectTo(FSFile dir) {
+		try {
+			Cs2dProject project = new Cs2dProject(resource, dir);
+			Cs2dProjectIO.save(project, dir);
+			currentProjectDir = dir;
+			lastSavedProjectModCount = undoManager.getModCount();
+			refreshProjectMenuState();
+			refreshTitle();
+			statusBar.setText(" Saved project to " + dir.getName());
+		} catch (Exception ex) {
+			ex.printStackTrace();
+			JOptionPane.showMessageDialog(this,
+				"Failed to save project:\n" + ex.getMessage(),
+				"Save project", JOptionPane.ERROR_MESSAGE);
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Animated GIF export (selected animation only)
+	// -------------------------------------------------------------------------
+
+	private void exportSelectedAnimAsGif() {
+		CS2DNode node = getSelectedNode();
+		Object content = node == null ? null : node.getContent();
+		if (!(content instanceof Sprite2DCellAnimation)
+			&& !(content instanceof Sprite2DMultiCellAnimation)) {
+			statusBar.setText(" Select an animation node first.");
+			return;
+		}
+		ExtensionFilter gif = new ExtensionFilter("Animated GIF", "*.gif");
+		DiskFile target = XFileDialog.openSaveFileDialog("Export Animation as GIF", gif);
+		if (target == null) return;
+		try {
+			if (content instanceof Sprite2DCellAnimation) {
+				AnimatedGifWriter.writeCellAnim((Sprite2DCellAnimation) content, resource, target);
+			} else {
+				AnimatedGifWriter.writeMultiCellAnim((Sprite2DMultiCellAnimation) content, resource, target);
+			}
+			statusBar.setText(" Exported GIF: " + target.getName());
+		} catch (Exception ex) {
+			ex.printStackTrace();
+			JOptionPane.showMessageDialog(this,
+				"Failed to export GIF:\n" + ex.getMessage(),
+				"Export GIF", JOptionPane.ERROR_MESSAGE);
+		}
+	}
+
+	/**
+	 * Unified close handler. Standalone / clean embedded sessions dispose
+	 * immediately; dirty embedded sessions get a Photoshop-style
+	 * Apply / Discard / Cancel prompt. Called from the {@code
+	 * windowClosing} listener installed in {@link #NGCS2D()} instead of
+	 * relying on {@link #DISPOSE_ON_CLOSE} — so the user can cancel out of
+	 * the prompt and keep editing.
+	 */
+	private void attemptClose() {
+		if (embeddedCallback == null || !isDirty()) {
+			dispose();
+			return;
+		}
+		int choice = JOptionPane.showConfirmDialog(
+			NGCS2D.this,
+			"You have unsaved changes.\n\nApply them to the ROM before closing?",
+			"Unsaved changes",
+			JOptionPane.YES_NO_CANCEL_OPTION,
+			JOptionPane.WARNING_MESSAGE);
+		switch (choice) {
+			case JOptionPane.YES_OPTION:
+				applyEmbedded();
+				// Only dispose if the apply actually succeeded — keep the
+				// window open so the user can retry on failure.
+				if (!isDirty()) {
+					dispose();
+				}
+				break;
+			case JOptionPane.NO_OPTION:
+				// Explicit discard.
+				dispose();
+				break;
+			case JOptionPane.CANCEL_OPTION:
+			case JOptionPane.CLOSED_OPTION:
+			default:
+				// Stay open — the user backed out of the close.
+				break;
+		}
 	}
 
 	// -------------------------------------------------------------------------
@@ -378,6 +760,16 @@ public class NGCS2D extends JFrame implements NGCS2DContentAccessor {
 			return (CS2DNode) node;
 		}
 		return null;
+	}
+
+	/**
+	 * Accessor for the shared editor controller. Tree nodes reach this
+	 * via {@code getCS().getEditorController()} inside their
+	 * {@code getEditor()} overrides so each node can wire itself to the
+	 * singleton editor that matches its content type.
+	 */
+	public NGCS2DEditorController getEditorController() {
+		return editors;
 	}
 
 	/**
@@ -599,8 +991,18 @@ public class NGCS2D extends JFrame implements NGCS2DContentAccessor {
 			return;
 		}
 		Object content = node.getContent();
+		// Canvas display logic only. The right-side inspector is now
+		// configured by NGCS2DEditorController.switchEditor(...) which
+		// calls the matching editor's handleObject() — that's where
+		// the Layers panel, Timeline, and play controls get their
+		// content. We just decide what, if anything, paints on the
+		// central canvas.
 		if (content instanceof Sprite2DPalette) {
-			canvas.showPalette((Sprite2DPalette) content);
+			// Per the inspector redesign: palettes are edited in the
+			// right panel only. The main canvas does NOT show the
+			// palette grid — it stays empty so the user's mental model
+			// "canvas = sprite" holds.
+			canvas.showNothing();
 			resetAnimControl();
 		} else if (content instanceof Sprite2DTileSheet) {
 			canvas.showTileSheet((Sprite2DTileSheet) content);
@@ -622,39 +1024,20 @@ public class NGCS2D extends JFrame implements NGCS2DContentAccessor {
 			canvas.showNothing();
 			resetAnimControl();
 		} else if (content instanceof Sprite2DCellAnimation) {
-			Sprite2DCellAnimation anim = (Sprite2DCellAnimation) content;
-			canvas.showCellAnimation(anim);
-			if (animControlPanel != null) {
-				int n = anim.getFrameCount();
-				int[] durs = new int[n];
-				for (int i = 0; i < n; i++) {
-					durs[i] = Math.max(1, anim.frames.get(i).duration);
-				}
-				animControlPanel.setFrameDurations(durs);
-				animControlPanel.setCurrentFrame(0);
-			}
+			canvas.showCellAnimation((Sprite2DCellAnimation) content);
+			// Duration / current-frame setup is done by the CellAnimEditor's
+			// handleObject() — switchEditor was already called by the tree
+			// selection listener before we got here.
 		} else if (content instanceof Sprite2DMultiCell) {
 			canvas.showMultiCell((Sprite2DMultiCell) content);
 			if (animControlPanel != null) {
-				// Multi-cell preview has no outer NMAR frame list, but each
-				// entry may still reference a NANR that needs to tick in real
-				// time. Enable continuous-playback mode so the control panel
-				// runs the master tick counter off the play button without
-				// requiring the user to load an outer animation first.
+				// Multi-cell static preview has no outer NMAR but each
+				// entry's sub-NANR still needs to tick in real time.
 				animControlPanel.setContinuousPlayback(true);
 			}
 		} else if (content instanceof Sprite2DMultiCellAnimation) {
-			Sprite2DMultiCellAnimation anim = (Sprite2DMultiCellAnimation) content;
-			canvas.showMultiCellAnimation(anim);
-			if (animControlPanel != null) {
-				int n = anim.getFrameCount();
-				int[] durs = new int[n];
-				for (int i = 0; i < n; i++) {
-					durs[i] = Math.max(1, anim.frames.get(i).duration);
-				}
-				animControlPanel.setFrameDurations(durs);
-				animControlPanel.setCurrentFrame(0);
-			}
+			canvas.showMultiCellAnimation((Sprite2DMultiCellAnimation) content);
+			// Same note as CellAnimation above.
 		}
 	}
 

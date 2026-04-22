@@ -244,6 +244,70 @@ public class CS2DAnimControlPanel extends JPanel {
 	}
 
 	/**
+	 * Seeks the playhead to an absolute tick in the animation's
+	 * timeline. Pauses playback (Vegas-style — scrubbing the timeline
+	 * should stop runaway advance) and walks the per-frame duration
+	 * table to translate tick → (frame, elapsedInFrame). Clamps to the
+	 * final frame when {@code tick} exceeds total duration.
+	 *
+	 * <p>Used by the Vegas-style timeline panel: the user clicks on
+	 * the ruler / cell track, and that tick gets delivered here.</p>
+	 *
+	 * <p>Falls back to the legacy "one frame per tick" model when no
+	 * per-frame duration table has been installed, matching the rest
+	 * of this class's behaviour for simple sliders.</p>
+	 */
+	public void seekToTick(long tick) {
+		if (tick < 0) tick = 0;
+		// Scrubbing pauses playback. The user is explicitly driving
+		// the playhead; we shouldn't also be auto-advancing it.
+		if (isPlaying) {
+			isPlaying = false;
+			animTimer.stop();
+		}
+		if (frameDurations == null || frameDurations.length == 0) {
+			// Legacy tick == frame mapping.
+			int clampedFrame = totalFrames > 0
+				? (int) Math.min(tick, totalFrames - 1)
+				: 0;
+			currentFrame = clampedFrame;
+			elapsedInFrame = 0;
+			elapsedTicks = tick;
+			updateAnimUI();
+			return;
+		}
+		long acc = 0;
+		for (int i = 0; i < frameDurations.length; i++) {
+			long dur = Math.max(1, frameDurations[i]);
+			if (tick < acc + dur) {
+				currentFrame = i;
+				elapsedInFrame = (int) (tick - acc);
+				elapsedTicks = tick;
+				updateAnimUI();
+				return;
+			}
+			acc += dur;
+		}
+		// Past the end — clamp to last frame's final tick.
+		currentFrame = frameDurations.length - 1;
+		elapsedInFrame = Math.max(0, frameDurations[currentFrame] - 1);
+		elapsedTicks = acc - 1;
+		updateAnimUI();
+	}
+
+	/**
+	 * @return sum of all frame durations in ticks. {@code 0} when no
+	 *         duration table has been installed (including continuous
+	 *         mode). Used by the timeline ruler.
+	 */
+	public long getTotalDurationTicks() {
+		if (frameDurations == null) return 0;
+		long acc = 0;
+		for (int d : frameDurations) acc += Math.max(1, d);
+		return acc;
+	}
+
+	/**
 	 * Returns the cumulative tick count at which the given outer frame
 	 * begins, so step/seek actions can realign the master clock with the
 	 * slider position. Out-of-range frames clamp to 0.

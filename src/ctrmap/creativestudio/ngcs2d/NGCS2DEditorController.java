@@ -1,6 +1,7 @@
 package ctrmap.creativestudio.ngcs2d;
 
 import ctrmap.creativestudio.editors.IEditor;
+import ctrmap.creativestudio.ngcs2d.canvas.undo.SpriteUndoManager;
 import ctrmap.creativestudio.ngcs2d.editors.CellAnimEditor;
 import ctrmap.creativestudio.ngcs2d.editors.CellEditor;
 import ctrmap.creativestudio.ngcs2d.editors.MultiCellAnimEditor;
@@ -29,14 +30,17 @@ public class NGCS2DEditorController {
 	public PaletteEditor paletteEditor = new PaletteEditor();
 
 	/**
-	 * Editor for {@code Sprite2DTileSheet} resources.
+	 * Editor for {@code Sprite2DTileSheet} resources. Constructed with the
+	 * shared undo manager so each property edit pushes a coalesced undo
+	 * action into the same stack as canvas pixel edits and layer changes.
 	 */
-	public TileSheetEditor tileSheetEditor = new TileSheetEditor();
+	public final TileSheetEditor tileSheetEditor;
 
 	/**
-	 * Editor for {@code Sprite2DCell} resources.
+	 * Editor for {@code Sprite2DCell} resources. Constructed with the
+	 * shared undo manager for the same reason as {@link #tileSheetEditor}.
 	 */
-	public CellEditor cellEditor = new CellEditor();
+	public final CellEditor cellEditor;
 
 	/**
 	 * Editor for {@code Sprite2DOAM} resources.
@@ -76,6 +80,16 @@ public class NGCS2DEditorController {
 	 * The currently active editor. Defaults to the no-op editor.
 	 */
 	public IEditor currentEditor = defaultEditor;
+
+	/**
+	 * Constructs the controller and instantiates each editor. The shared
+	 * {@link SpriteUndoManager} is forwarded to the editors that support
+	 * undoable property edits ({@link TileSheetEditor}, {@link CellEditor}).
+	 */
+	public NGCS2DEditorController(SpriteUndoManager undoManager) {
+		this.tileSheetEditor = new TileSheetEditor(undoManager);
+		this.cellEditor = new CellEditor(undoManager);
+	}
 
 	/**
 	 * Switches the active editor, saves the previous editor's state, and

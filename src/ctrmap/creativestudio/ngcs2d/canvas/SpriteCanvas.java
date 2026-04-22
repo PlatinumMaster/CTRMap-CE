@@ -9,6 +9,7 @@ import ctrmap.creativestudio.ngcs2d.res.Sprite2DMultiCellAnimation;
 import ctrmap.creativestudio.ngcs2d.res.Sprite2DPalette;
 import ctrmap.creativestudio.ngcs2d.res.Sprite2DResource;
 import ctrmap.creativestudio.ngcs2d.res.Sprite2DTileSheet;
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
@@ -16,6 +17,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.RenderingHints;
+import java.awt.Stroke;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
@@ -69,7 +71,20 @@ public class SpriteCanvas extends JPanel {
 	// so it can find which entry sits under a given pixel.
 	private SpriteRenderer.MultiCellLayout multiCellLayout;
 
-	private double zoom = 2.0;
+	/** If non-null, the canvas draws an outline box around this entry's
+	 *  screen rectangle to indicate it's the Layers-panel-selected
+	 *  layer. Identity comparison — the caller must pass the same entry
+	 *  instance that's stored in {@code multiCellLayout.entries[*].entry}
+	 *  or the outline won't render. */
+	private Sprite2DMultiCell.MultiCellEntry highlightedEntry;
+
+	/** Colours for the two-layer highlight outline. The outer dark ring
+	 *  gives contrast on light sprites, the inner bright ring does the
+	 *  same on dark ones — same idea as Photoshop's marching ants. */
+	private static final Color HIGHLIGHT_OUTER = new Color(0, 0, 0, 220);
+	private static final Color HIGHLIGHT_INNER = new Color(255, 208, 0, 255);
+
+	private double zoom = 4.0;
 	private int panX = 0;
 	private int panY = 0;
 	private boolean showGrid = false;
@@ -246,6 +261,32 @@ public class SpriteCanvas extends JPanel {
 			}
 			for (int py = 0; py <= imgH; py++) {
 				g.drawLine(0, py, imgW, py);
+			}
+		}
+
+		// Layers-panel selection overlay. Drawn in rendered-image pixel
+		// coords inside the pan+scale transform so the box scales with
+		// the sprite. Stroke width is scaled inversely so on-screen
+		// thickness stays constant regardless of zoom.
+		if (highlightedEntry != null && multiCellLayout != null) {
+			SpriteRenderer.MultiCellEntryLayout slot = findLayoutFor(highlightedEntry);
+			if (slot != null) {
+				Stroke savedStroke = g.getStroke();
+				float outerPx = Math.max(1.0f / (float) zoom, 1.0f / 32f);
+				float innerPx = Math.max(0.6f / (float) zoom, 1.0f / 32f);
+				// Outer ring for dark sprites
+				g.setStroke(new BasicStroke(outerPx * 2f));
+				g.setColor(HIGHLIGHT_OUTER);
+				g.drawRect(slot.drawX, slot.drawY,
+					Math.max(0, slot.width - 1),
+					Math.max(0, slot.height - 1));
+				// Inner bright ring
+				g.setStroke(new BasicStroke(innerPx * 2f));
+				g.setColor(HIGHLIGHT_INNER);
+				g.drawRect(slot.drawX, slot.drawY,
+					Math.max(0, slot.width - 1),
+					Math.max(0, slot.height - 1));
+				g.setStroke(savedStroke);
 			}
 		}
 
@@ -568,6 +609,33 @@ public class SpriteCanvas extends JPanel {
 	}
 
 	/**
+	 * Sets the multi-cell entry that should be outlined on the canvas.
+	 * Null clears the outline. Driven by the Layers panel — clicking a
+	 * layer row pushes the matching entry here so it gets a visible box.
+	 */
+	public void setHighlightedEntry(Sprite2DMultiCell.MultiCellEntry entry) {
+		if (this.highlightedEntry == entry) return;
+		this.highlightedEntry = entry;
+		repaint();
+	}
+
+	/** @return the entry currently outlined, or {@code null}. */
+	public Sprite2DMultiCell.MultiCellEntry getHighlightedEntry() {
+		return highlightedEntry;
+	}
+
+	/** Finds the layout slot whose {@code entry} matches the supplied one
+	 *  by identity. Returns null if the layout is stale or the entry
+	 *  isn't part of the currently-rendered multi-cell. */
+	private SpriteRenderer.MultiCellEntryLayout findLayoutFor(Sprite2DMultiCell.MultiCellEntry entry) {
+		if (multiCellLayout == null || entry == null) return null;
+		for (SpriteRenderer.MultiCellEntryLayout slot : multiCellLayout.entries) {
+			if (slot.entry == entry) return slot;
+		}
+		return null;
+	}
+
+	/**
 	 * Converts a mouse position to pixel coordinates in the rendered image.
 	 */
 	public Point canvasToPixel(Point mousePoint) {
@@ -587,7 +655,7 @@ public class SpriteCanvas extends JPanel {
 	 * Resets the viewport to default zoom and pan.
 	 */
 	public void resetView() {
-		zoom = 2.0;
+		zoom = 4.0;
 		panX = 0;
 		panY = 0;
 		repaint();

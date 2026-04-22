@@ -1,5 +1,6 @@
 package ctrmap.creativestudio.ngcs2d.tree;
 
+import ctrmap.creativestudio.editors.IEditor;
 import ctrmap.creativestudio.ngcs2d.res.Sprite2DCell;
 import ctrmap.creativestudio.ngcs2d.res.Sprite2DOAM;
 import xstandard.util.ListenableList;
@@ -66,5 +67,10 @@ public class CS2DCellNode extends CS2DNode {
 	@Override
 	public ListenableList getParentList() {
 		return getCS().getResource().cells;
+	}
+
+	@Override
+	public IEditor getEditor() {
+		return getCS().getEditorController().cellEditor;
 	}
 }

@@ -1,29 +1,29 @@
 package ctrmap.creativestudio.ngcs2d.editors;
 
 import ctrmap.creativestudio.editors.IEditor;
+import ctrmap.creativestudio.ngcs2d.canvas.CS2DAnimControlPanel;
 import ctrmap.creativestudio.ngcs2d.res.Sprite2DMultiCellAnimation;
-import ctrmap.creativestudio.ngcs2d.res.Sprite2DMultiCellAnimation.MultiCellAnimFrame;
+import ctrmap.creativestudio.ngcs2d.timeline.TimelinePanel;
 
 import java.awt.BorderLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
-import javax.swing.DefaultListModel;
-import javax.swing.JButton;
+import javax.swing.BoxLayout;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
-import javax.swing.JList;
 import javax.swing.JPanel;
-import javax.swing.JScrollPane;
 import javax.swing.JTextField;
-import javax.swing.ListSelectionModel;
 
 /**
- * Property editor panel for {@code Sprite2DMultiCellAnimation} resources.
+ * Property editor for {@code Sprite2DMultiCellAnimation} resources.
  *
- * <p>Displays the animation name, play mode selector, frame count with total
- * duration, and a list of frame summaries showing the multi-cell index and
- * duration. Provides buttons to add and remove animation frames.</p>
+ * <p>Identical layout to {@link CellAnimEditor} — header with
+ * name / play mode / frame count, body hosting the shared
+ * {@link TimelinePanel} + {@link CS2DAnimControlPanel}. Kept as a
+ * separate class because the editor controller instantiates one
+ * editor per content type, but the UI + wiring is a line-for-line
+ * mirror.</p>
  */
 public class MultiCellAnimEditor extends JPanel implements IEditor {
 
@@ -36,93 +36,65 @@ public class MultiCellAnimEditor extends JPanel implements IEditor {
 	private final JTextField nameField;
 	private final JComboBox<String> playModeCombo;
 	private final JLabel frameInfoLabel;
-	private final DefaultListModel<String> frameListModel;
-	private final JList<String> frameList;
+	private final JPanel bodyHost;
 
-	/**
-	 * Constructs the multi-cell animation editor panel with header controls,
-	 * frame list, and add/remove buttons.
-	 */
+	private TimelinePanel timelinePanel;
+	private CS2DAnimControlPanel animControlPanel;
+
 	public MultiCellAnimEditor() {
-		setLayout(new BorderLayout(0, 8));
+		setLayout(new BorderLayout(0, 4));
 
-		JPanel headerPanel = new JPanel(new GridBagLayout());
+		JPanel header = new JPanel(new GridBagLayout());
 		GridBagConstraints gbc = new GridBagConstraints();
 		gbc.insets = new Insets(4, 4, 4, 4);
 		gbc.anchor = GridBagConstraints.WEST;
 
-		gbc.gridx = 0;
-		gbc.gridy = 0;
-		headerPanel.add(new JLabel("Name:"), gbc);
-
-		gbc.gridx = 1;
-		gbc.fill = GridBagConstraints.HORIZONTAL;
-		gbc.weightx = 1.0;
+		gbc.gridx = 0; gbc.gridy = 0;
+		header.add(new JLabel("Name:"), gbc);
+		gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
 		nameField = new JTextField(20);
-		headerPanel.add(nameField, gbc);
+		header.add(nameField, gbc);
 
-		gbc.gridx = 0;
-		gbc.gridy = 1;
-		gbc.fill = GridBagConstraints.NONE;
-		gbc.weightx = 0;
-		headerPanel.add(new JLabel("Play Mode:"), gbc);
-
+		gbc.gridx = 0; gbc.gridy = 1;
+		gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+		header.add(new JLabel("Play mode:"), gbc);
 		gbc.gridx = 1;
-		gbc.fill = GridBagConstraints.HORIZONTAL;
-		gbc.weightx = 1.0;
 		playModeCombo = new JComboBox<>(PLAY_MODES);
-		headerPanel.add(playModeCombo, gbc);
+		header.add(playModeCombo, gbc);
 
-		gbc.gridx = 0;
-		gbc.gridy = 2;
-		gbc.fill = GridBagConstraints.NONE;
-		gbc.weightx = 0;
-		headerPanel.add(new JLabel("Info:"), gbc);
-
+		gbc.gridx = 0; gbc.gridy = 2;
+		header.add(new JLabel("Frames:"), gbc);
 		gbc.gridx = 1;
-		frameInfoLabel = new JLabel();
-		headerPanel.add(frameInfoLabel, gbc);
+		frameInfoLabel = new JLabel("0 (0 ticks)");
+		header.add(frameInfoLabel, gbc);
 
-		add(headerPanel, BorderLayout.NORTH);
+		add(header, BorderLayout.NORTH);
 
-		frameListModel = new DefaultListModel<>();
-		frameList = new JList<>(frameListModel);
-		frameList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-		JScrollPane listScroll = new JScrollPane(frameList);
-		add(listScroll, BorderLayout.CENTER);
-
-		JPanel buttonPanel = new JPanel();
-		JButton addButton = new JButton("Add Frame");
-		JButton removeButton = new JButton("Remove Frame");
-
-		addButton.addActionListener(e -> {
-			if (animation != null) {
-				animation.frames.add(new MultiCellAnimFrame());
-				refreshFrameList();
-			}
-		});
-
-		removeButton.addActionListener(e -> {
-			if (animation != null) {
-				int idx = frameList.getSelectedIndex();
-				if (idx >= 0 && idx < animation.frames.size()) {
-					animation.frames.remove(idx);
-					refreshFrameList();
-				}
-			}
-		});
-
-		buttonPanel.add(addButton);
-		buttonPanel.add(removeButton);
-		add(buttonPanel, BorderLayout.SOUTH);
+		bodyHost = new JPanel();
+		bodyHost.setLayout(new BoxLayout(bodyHost, BoxLayout.Y_AXIS));
+		JLabel placeholder = new JLabel(
+			"<html><div style='text-align:center;color:#888;padding:24px;'>"
+			+ "Timeline not wired in.</div></html>",
+			JLabel.CENTER);
+		bodyHost.add(placeholder);
+		add(bodyHost, BorderLayout.CENTER);
 	}
 
-	/**
-	 * Loads a {@code Sprite2DMultiCellAnimation} into the editor, populating
-	 * the name field, play mode selector, frame info, and frame list.
-	 *
-	 * @param o The {@code Sprite2DMultiCellAnimation} to edit, or {@code null} to clear the editor.
-	 */
+	public void attachComponents(TimelinePanel timelinePanel, CS2DAnimControlPanel animControlPanel) {
+		this.timelinePanel = timelinePanel;
+		this.animControlPanel = animControlPanel;
+		reparentBody();
+	}
+
+	private void reparentBody() {
+		if (timelinePanel == null || animControlPanel == null) return;
+		bodyHost.removeAll();
+		bodyHost.add(timelinePanel);
+		bodyHost.add(animControlPanel);
+		bodyHost.revalidate();
+		bodyHost.repaint();
+	}
+
 	@Override
 	public void handleObject(Object o) {
 		if (o instanceof Sprite2DMultiCellAnimation) {
@@ -130,52 +102,37 @@ public class MultiCellAnimEditor extends JPanel implements IEditor {
 		} else {
 			animation = null;
 		}
-
 		if (animation != null) {
-			nameField.setText(animation.name);
-			int modeIdx = animation.playMode;
-			if (modeIdx >= 0 && modeIdx < PLAY_MODES.length) {
-				playModeCombo.setSelectedIndex(modeIdx);
-			} else {
-				playModeCombo.setSelectedIndex(0);
+			nameField.setText(animation.name != null ? animation.name : "");
+			int mode = Math.max(0, Math.min(animation.playMode, PLAY_MODES.length - 1));
+			playModeCombo.setSelectedIndex(mode);
+			int nFrames = animation.getFrameCount();
+			int total = animation.getTotalDuration();
+			frameInfoLabel.setText(nFrames + " (" + total + " ticks)");
+
+			if (timelinePanel != null) timelinePanel.setAnimation(animation);
+			if (animControlPanel != null) {
+				int[] durs = new int[nFrames];
+				for (int i = 0; i < nFrames; i++) {
+					durs[i] = Math.max(1, animation.frames.get(i).duration);
+				}
+				animControlPanel.setFrameDurations(durs);
+				animControlPanel.setCurrentFrame(0);
 			}
-			refreshFrameList();
+			reparentBody();
 		} else {
 			nameField.setText("");
 			playModeCombo.setSelectedIndex(0);
-			frameInfoLabel.setText("");
-			frameListModel.clear();
+			frameInfoLabel.setText("0 (0 ticks)");
+			if (timelinePanel != null) timelinePanel.clear();
 		}
 	}
 
-	/**
-	 * Writes the current editor state back to the loaded animation resource.
-	 * Saves the name and play mode.
-	 */
 	@Override
 	public void save() {
 		if (animation != null) {
 			animation.name = nameField.getText();
 			animation.playMode = playModeCombo.getSelectedIndex();
-		}
-	}
-
-	/**
-	 * Rebuilds the frame list model and updates the frame info label
-	 * from the current animation's frame data.
-	 */
-	private void refreshFrameList() {
-		frameListModel.clear();
-		if (animation != null) {
-			frameInfoLabel.setText(
-				animation.getFrameCount() + " frames, total duration: " + animation.getTotalDuration()
-			);
-			for (int i = 0; i < animation.frames.size(); i++) {
-				MultiCellAnimFrame frame = animation.frames.get(i);
-				frameListModel.addElement(
-					"Frame " + i + ": multiCell=" + frame.multiCellIndex + ", dur=" + frame.duration
-				);
-			}
 		}
 	}
 }

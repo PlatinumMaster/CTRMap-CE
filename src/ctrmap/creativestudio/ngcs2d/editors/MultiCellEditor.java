@@ -1,28 +1,26 @@
 package ctrmap.creativestudio.ngcs2d.editors;
 
 import ctrmap.creativestudio.editors.IEditor;
+import ctrmap.creativestudio.ngcs2d.layers.LayersPanel;
 import ctrmap.creativestudio.ngcs2d.res.Sprite2DMultiCell;
-import ctrmap.creativestudio.ngcs2d.res.Sprite2DMultiCell.MultiCellEntry;
 
 import java.awt.BorderLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
-import javax.swing.DefaultListModel;
-import javax.swing.JButton;
 import javax.swing.JLabel;
-import javax.swing.JList;
 import javax.swing.JPanel;
-import javax.swing.JScrollPane;
 import javax.swing.JTextField;
-import javax.swing.ListSelectionModel;
 
 /**
  * Property editor panel for {@code Sprite2DMultiCell} resources.
  *
- * <p>Displays the multi-cell name in an editable text field, the entry count,
- * and a list of entry summaries showing the animation index and position
- * offset. Provides buttons to add and remove entries.</p>
+ * <p>Previously this was a raw entry list. The multi-cell's entries are
+ * now surfaced via the Photoshop-style {@link LayersPanel}, wired in
+ * after construction by {@code NGCS2D} (the panel is shared across all
+ * editor instances so its canvas-sync listeners only need one set of
+ * wires). The header stays simple: just the editable name field and an
+ * entry count readout.</p>
  */
 public class MultiCellEditor extends JPanel implements IEditor {
 
@@ -30,23 +28,19 @@ public class MultiCellEditor extends JPanel implements IEditor {
 
 	private final JTextField nameField;
 	private final JLabel entryCountLabel;
-	private final DefaultListModel<String> entryListModel;
-	private final JList<String> entryList;
+	private final JPanel bodyHost;
+	private LayersPanel layersPanel;
 
-	/**
-	 * Constructs the multi-cell editor panel with a name field, entry count
-	 * label, entry list, and add/remove buttons.
-	 */
 	public MultiCellEditor() {
 		setLayout(new BorderLayout(0, 8));
 
+		// Header: name + entry count
 		JPanel headerPanel = new JPanel(new GridBagLayout());
 		GridBagConstraints gbc = new GridBagConstraints();
 		gbc.insets = new Insets(4, 4, 4, 4);
 		gbc.anchor = GridBagConstraints.WEST;
 
-		gbc.gridx = 0;
-		gbc.gridy = 0;
+		gbc.gridx = 0; gbc.gridy = 0;
 		headerPanel.add(new JLabel("Name:"), gbc);
 
 		gbc.gridx = 1;
@@ -55,8 +49,7 @@ public class MultiCellEditor extends JPanel implements IEditor {
 		nameField = new JTextField(20);
 		headerPanel.add(nameField, gbc);
 
-		gbc.gridx = 0;
-		gbc.gridy = 1;
+		gbc.gridx = 0; gbc.gridy = 1;
 		gbc.fill = GridBagConstraints.NONE;
 		gbc.weightx = 0;
 		headerPanel.add(new JLabel("Entries:"), gbc);
@@ -67,44 +60,33 @@ public class MultiCellEditor extends JPanel implements IEditor {
 
 		add(headerPanel, BorderLayout.NORTH);
 
-		entryListModel = new DefaultListModel<>();
-		entryList = new JList<>(entryListModel);
-		entryList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-		JScrollPane listScroll = new JScrollPane(entryList);
-		add(listScroll, BorderLayout.CENTER);
-
-		JPanel buttonPanel = new JPanel();
-		JButton addButton = new JButton("Add Entry");
-		JButton removeButton = new JButton("Remove Entry");
-
-		addButton.addActionListener(e -> {
-			if (multiCell != null) {
-				multiCell.entries.add(new MultiCellEntry());
-				refreshEntryList();
-			}
-		});
-
-		removeButton.addActionListener(e -> {
-			if (multiCell != null) {
-				int idx = entryList.getSelectedIndex();
-				if (idx >= 0 && idx < multiCell.entries.size()) {
-					multiCell.entries.remove(idx);
-					refreshEntryList();
-				}
-			}
-		});
-
-		buttonPanel.add(addButton);
-		buttonPanel.add(removeButton);
-		add(buttonPanel, BorderLayout.SOUTH);
+		// Body host: LayersPanel mounts here once NGCS2D injects it.
+		// Until then the placeholder label warns callers that wiring
+		// wasn't completed, which would only happen if someone builds
+		// NGCS2DEditorController without going through NGCS2D.
+		bodyHost = new JPanel(new BorderLayout());
+		JLabel placeholder = new JLabel(
+			"<html><div style='text-align:center;color:#888;padding:24px;'>"
+			+ "Layers panel not wired in.</div></html>",
+			JLabel.CENTER);
+		bodyHost.add(placeholder, BorderLayout.CENTER);
+		add(bodyHost, BorderLayout.CENTER);
 	}
 
 	/**
-	 * Loads a {@code Sprite2DMultiCell} into the editor, populating the name
-	 * field, entry count, and entry list.
-	 *
-	 * @param o The {@code Sprite2DMultiCell} to edit, or {@code null} to clear the editor.
+	 * Installs the shared Photoshop-style layers panel. Called once by
+	 * {@code NGCS2D} during initial wiring; the same {@link LayersPanel}
+	 * instance is used by every multi-cell selection so its undo/canvas
+	 * plumbing survives editor swaps.
 	 */
+	public void setLayersPanel(LayersPanel layersPanel) {
+		this.layersPanel = layersPanel;
+		bodyHost.removeAll();
+		bodyHost.add(layersPanel, BorderLayout.CENTER);
+		bodyHost.revalidate();
+		bodyHost.repaint();
+	}
+
 	@Override
 	public void handleObject(Object o) {
 		if (o instanceof Sprite2DMultiCell) {
@@ -112,41 +94,30 @@ public class MultiCellEditor extends JPanel implements IEditor {
 		} else {
 			multiCell = null;
 		}
-
 		if (multiCell != null) {
-			nameField.setText(multiCell.name);
-			refreshEntryList();
+			nameField.setText(multiCell.name != null ? multiCell.name : "");
+			entryCountLabel.setText(String.valueOf(multiCell.getEntryCount()));
+			if (layersPanel != null) {
+				// Re-root the shared LayersPanel into our bodyHost — it
+				// might currently live in CellEditor.bodyHost, which would
+				// leave us empty otherwise.
+				bodyHost.removeAll();
+				bodyHost.add(layersPanel, BorderLayout.CENTER);
+				bodyHost.revalidate();
+				bodyHost.repaint();
+				layersPanel.setMultiCell(multiCell);
+			}
 		} else {
 			nameField.setText("");
 			entryCountLabel.setText("0");
-			entryListModel.clear();
+			if (layersPanel != null) layersPanel.clear();
 		}
 	}
 
-	/**
-	 * Writes the current editor state back to the loaded multi-cell resource.
-	 * Saves the name field value to the multi-cell's name.
-	 */
 	@Override
 	public void save() {
 		if (multiCell != null) {
 			multiCell.name = nameField.getText();
-		}
-	}
-
-	/**
-	 * Rebuilds the entry list model from the current multi-cell's entries.
-	 */
-	private void refreshEntryList() {
-		entryListModel.clear();
-		if (multiCell != null) {
-			entryCountLabel.setText(String.valueOf(multiCell.getEntryCount()));
-			for (int i = 0; i < multiCell.entries.size(); i++) {
-				MultiCellEntry entry = multiCell.entries.get(i);
-				entryListModel.addElement(
-					"Entry " + i + ": anim=" + entry.animIndex + " @ (" + entry.x + ", " + entry.y + ")"
-				);
-			}
 		}
 	}
 }

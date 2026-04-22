@@ -1,5 +1,6 @@
 package ctrmap.creativestudio.ngcs2d.res;
 
+import ctrmap.creativestudio.ngcs2d.layers.LayerItem;
 import java.util.ArrayList;
 import java.util.List;
 import xstandard.INamed;
@@ -59,10 +60,30 @@ public class Sprite2DMultiCell implements INamed {
 	}
 
 	/**
-	 * An entry in a multi-cell, referencing a cell animation
-	 * and providing a position offset.
+	 * Returns only the entries whose {@link MultiCellEntry#visible} flag
+	 * is set, preserving stack order. Parallels
+	 * {@link Sprite2DCell#getVisibleOAMs()}: hidden entries are skipped
+	 * by both the canvas preview and the NITRO export. Returns a fresh
+	 * list — safe to mutate.
 	 */
-	public static class MultiCellEntry {
+	public List<MultiCellEntry> getVisibleEntries() {
+		List<MultiCellEntry> out = new ArrayList<>(entries.size());
+		for (MultiCellEntry e : entries) {
+			if (e != null && e.visible) {
+				out.add(e);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * An entry in a multi-cell, referencing a cell animation
+	 * and providing a position offset. Each entry is treated as a
+	 * "layer" in the NGCS2D Layers panel — this is the granularity at
+	 * which trainer / Pokemon sprites are authored (one entry per body
+	 * part: head, torso, arm, etc.).
+	 */
+	public static class MultiCellEntry implements LayerItem {
 
 		/**
 		 * Index into the cell animation list.
@@ -78,6 +99,25 @@ public class Sprite2DMultiCell implements INamed {
 		 * Pixel offset Y for this entry.
 		 */
 		public short y;
+
+		// ---------------------------------------------------------------------
+		// Editor-only layer metadata. Parallel to Sprite2DOAM's fields — each
+		// multi-cell entry is treated as a "layer" in the CS 2D layer panel
+		// when a multi-cell is selected. Not serialised to NITRO; the NMCR
+		// export drops hidden entries and ignores partial opacity.
+		// ---------------------------------------------------------------------
+
+		/** User-facing layer name; null = panel synthesises "Layer N". */
+		public String layerName;
+
+		/** Whether this entry renders and is exported. Default: {@code true}. */
+		public boolean visible = true;
+
+		/** Layer opacity (canvas-only; NITRO can't encode it). Default: 1.0. */
+		public float opacity = 1.0f;
+
+		/** UI-level edit guard. Default: {@code false}. */
+		public boolean locked = false;
 
 		/**
 		 * Constructs a default multi-cell entry.
@@ -98,5 +138,30 @@ public class Sprite2DMultiCell implements INamed {
 			this.x = x;
 			this.y = y;
 		}
+
+		/**
+		 * Copy constructor. Deep-copies all fields including editor-only
+		 * layer metadata.
+		 */
+		public MultiCellEntry(MultiCellEntry src) {
+			this.animIndex = src.animIndex;
+			this.x = src.x;
+			this.y = src.y;
+			this.layerName = src.layerName;
+			this.visible = src.visible;
+			this.opacity = src.opacity;
+			this.locked = src.locked;
+		}
+
+		// --- LayerItem interface (field-backed, trivial) ---
+
+		@Override public String getLayerName() { return layerName; }
+		@Override public void setLayerName(String name) { this.layerName = name; }
+		@Override public boolean isVisible() { return visible; }
+		@Override public void setVisible(boolean visible) { this.visible = visible; }
+		@Override public float getOpacity() { return opacity; }
+		@Override public void setOpacity(float opacity) { this.opacity = opacity; }
+		@Override public boolean isLocked() { return locked; }
+		@Override public void setLocked(boolean locked) { this.locked = locked; }
 	}
 }

@@ -1,5 +1,6 @@
 package ctrmap.creativestudio.ngcs2d.tree;
 
+import ctrmap.creativestudio.editors.IEditor;
 import ctrmap.creativestudio.ngcs2d.res.Sprite2DMultiCellAnimation;
 import xstandard.util.ListenableList;
 
@@ -49,5 +50,10 @@ public class CS2DMultiCellAnimNode extends CS2DNode {
 	@Override
 	public ListenableList getParentList() {
 		return getCS().getResource().multiCellAnimations;
+	}
+
+	@Override
+	public IEditor getEditor() {
+		return getCS().getEditorController().multiCellAnimEditor;
 	}
 }
