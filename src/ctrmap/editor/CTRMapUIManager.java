@@ -27,6 +27,13 @@ public class CTRMapUIManager {
 		return menu;
 	}
 
+	public void addSubMenu(String root, String sub) {
+		JMenu parent = getMenu(root);
+		JMenu child = new JMenu(sub);
+		menus.put(sub, child);
+		parent.add(child);
+	}
+
 	public JMenuItem addMenuItem(String menuName, String itemName, ActionCallback callback) {
 		JMenuItem item = new JMenuItem(itemName);
 		item.addActionListener(new ActionListener() {

@@ -174,6 +174,16 @@ public class CTRMapPluginInterface implements JExtensionReceiver<ICTRMapPlugin> 
 	}
 
 	/**
+	 * Creates a submenu in an existing menu group,
+	 *
+	 * @param parentMenu Name of the root menu group.
+	 * @param childMenu Name of the submenu group.
+	 */
+	public void rmoAddSubMenu(String parentMenu, String childMenu) {
+		cm.getUIManager().addSubMenu(parentMenu, childMenu);
+	}
+
+	/**
 	 * Creates a menu item with an arbitrary user callback in the editor menu bar,
 	 *
 	 * @param menuName Name of the root menu group.
