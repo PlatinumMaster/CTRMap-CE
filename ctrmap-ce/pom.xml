@@ -19,13 +19,10 @@
         <build.commit>unknown</build.commit>
         <build.type>nightly</build.type>
         <build.github.repo>PlatinumMaster/CTRMap-CE</build.github.repo>
+        <jogamp.version>2.6.0</jogamp.version>
     </properties>
 
     <repositories>
-        <repository>
-            <id>jogamp</id>
-            <url>https://jogamp.org/deployment/maven</url>
-        </repository>
         <repository>
             <id>frankenjfx-local</id>
             <url>file://${project.basedir}/../submodules/XStandard/lib/repo</url>
@@ -56,59 +53,59 @@
         <dependency>
             <groupId>org.jogamp.jogl</groupId>
             <artifactId>jogl-all</artifactId>
-            <version>2.4.0</version>
+            <version>${jogamp.version}</version>
         </dependency>
         <dependency>
             <groupId>org.jogamp.jogl</groupId>
             <artifactId>jogl-all</artifactId>
-            <version>2.4.0</version>
+            <version>${jogamp.version}</version>
             <classifier>natives-windows-amd64</classifier>
         </dependency>
         <dependency>
             <groupId>org.jogamp.jogl</groupId>
             <artifactId>jogl-all</artifactId>
-            <version>2.4.0</version>
+            <version>${jogamp.version}</version>
             <classifier>natives-linux-amd64</classifier>
         </dependency>
         <dependency>
             <groupId>org.jogamp.jogl</groupId>
             <artifactId>jogl-all</artifactId>
-            <version>2.4.0</version>
+            <version>${jogamp.version}</version>
             <classifier>natives-linux-aarch64</classifier>
         </dependency>
         <dependency>
             <groupId>org.jogamp.jogl</groupId>
             <artifactId>jogl-all</artifactId>
-            <version>2.4.0</version>
+            <version>${jogamp.version}</version>
             <classifier>natives-macosx-universal</classifier>
         </dependency>
         <dependency>
             <groupId>org.jogamp.gluegen</groupId>
             <artifactId>gluegen-rt</artifactId>
-            <version>2.4.0</version>
+            <version>${jogamp.version}</version>
         </dependency>
         <dependency>
             <groupId>org.jogamp.gluegen</groupId>
             <artifactId>gluegen-rt</artifactId>
-            <version>2.4.0</version>
+            <version>${jogamp.version}</version>
             <classifier>natives-windows-amd64</classifier>
         </dependency>
         <dependency>
             <groupId>org.jogamp.gluegen</groupId>
             <artifactId>gluegen-rt</artifactId>
-            <version>2.4.0</version>
+            <version>${jogamp.version}</version>
             <classifier>natives-linux-amd64</classifier>
         </dependency>
         <dependency>
             <groupId>org.jogamp.gluegen</groupId>
             <artifactId>gluegen-rt</artifactId>
-            <version>2.4.0</version>
+            <version>${jogamp.version}</version>
             <classifier>natives-linux-aarch64</classifier>
         </dependency>
         <dependency>
             <groupId>org.jogamp.gluegen</groupId>
             <artifactId>gluegen-rt</artifactId>
-            <version>2.4.0</version>
+            <version>${jogamp.version}</version>
             <classifier>natives-macosx-universal</classifier>
         </dependency>
         <dependency>
